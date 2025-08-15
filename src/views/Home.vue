@@ -12,10 +12,12 @@ import { ref, onMounted, computed, watch } from "vue";
 import { useEventsStore } from "@/stores/events";
 import { useCalendarStore } from "@/stores/calendar";
 import { storeToRefs } from "pinia";
-import { Day, Week, Month } from "@/components/Calendar";
-import EventPopover from "@/components/EventPopover/EventPopover.vue";
+import { Calendar } from "@/components/Calendar";
+import EventPopover from "@/components/EventPopover";
 import type { UserSwitchType } from "@/stores/app";
-import type { EventData } from "@/components/EventPopover/EventPopover.vue";
+import type { EventData } from "@/components/EventPopover/types";
+import EventDetail from "@/components/EventDetail";
+import EventForm from "@/components/EventForm";
 
 // 获取 stores
 const eventsStore = useEventsStore();
@@ -48,8 +50,11 @@ const viewType = computed(() => calendarStore.viewType);
 
 // Popover相关状态
 const popoverVisible = ref(false);
+const formVisible = ref(false);
 const popoverEventData = ref<EventData | null>(null);
 const popoverTargetElement = ref<HTMLElement | null>(null);
+const formTargetElement = ref<HTMLElement | null>(null);
+const eventFormData = ref<EventData | null>(null);
 
 // 事件处理方法
 const handleEventClick = (arg: any) => {
@@ -61,31 +66,29 @@ const handleEventClick = (arg: any) => {
   popoverVisible.value = true;
 };
 
+const handleEventChange = (event: any) => {
+  console.log("handleEventChange:", event);
+};
+
+const handleEventCreate = (arg: any) => {
+  setTimeout(() => {
+    formVisible.value = true;
+    formTargetElement.value = arg.el;
+    eventFormData.value = arg.event;
+  }, 100);
+};
+
+const handleEventCreateCancel = () => {
+  console.log("handleEventCreateCancel");
+  formVisible.value = false;
+  formTargetElement.value = null;
+};
+
 // Popover事件处理
 const handlePopoverClose = () => {
   popoverVisible.value = false;
   popoverEventData.value = null;
   popoverTargetElement.value = null;
-};
-
-const handleEventEdit = (eventData: EventData) => {
-  console.log("编辑事件:", eventData);
-  // TODO: 实现编辑功能
-  handlePopoverClose();
-};
-
-const handleEventDelete = (eventData: EventData) => {
-  console.log("删除事件:", eventData);
-  // TODO: 实现删除功能
-  handlePopoverClose();
-};
-
-const handleEventDrop = (event: any) => {
-  console.log("Month event dropped:", event);
-};
-
-const handleEventResize = (event: any) => {
-  console.log("Month event resized:", event);
 };
 
 // 处理 tab 切换
@@ -205,26 +208,15 @@ onMounted(async () => {
         </div>
 
         <div class="calendar">
-          <Month
-            v-if="viewType === 'month'"
+          <Calendar
+            :view-type="viewType"
             :selected-date="selectedDate"
             :events="events"
             @date-change="handleDateChange"
             @event-click="handleEventClick"
-            @event-drop="handleEventDrop"
-            @event-resize="handleEventResize"
-          />
-          <Week
-            v-if="viewType === 'week'"
-            :selected-date="selectedDate"
-            :events="events"
-            @date-change="handleDateChange"
-            @event-click="handleEventClick"
-          />
-          <Day
-            v-if="viewType === 'day'"
-            :events="events"
-            @event-click="handleEventClick"
+            @event-change="handleEventChange"
+            @event-created="handleEventCreate"
+            @event-create-cancel="handleEventCreateCancel"
           />
         </div>
       </div>
@@ -233,12 +225,21 @@ onMounted(async () => {
     <!-- 日程详情Popover -->
     <EventPopover
       :visible="popoverVisible"
-      :event-data="popoverEventData"
       :target-element="popoverTargetElement"
       @close="handlePopoverClose"
-      @edit="handleEventEdit"
-      @delete="handleEventDelete"
-    />
+      :width="300"
+    >
+      <EventDetail :event-data="popoverEventData" />
+    </EventPopover>
+
+    <!-- 日程表单 -->
+    <EventPopover
+      :visible="formVisible"
+      :target-element="formTargetElement"
+      :width="420"
+    >
+      <!-- <EventForm v-model="eventFormData" /> -->
+    </EventPopover>
   </div>
 </template>
 

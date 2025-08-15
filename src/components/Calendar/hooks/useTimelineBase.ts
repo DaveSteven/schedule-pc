@@ -1,13 +1,23 @@
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, type Ref } from 'vue';
 import dayjs from 'dayjs';
 import { useTimeUtils } from './useTimeUtils';
 
 /**
- * 当前时间线相关的hooks
+ * 通用时间轴基础功能hook
+ * 合并周视图和日视图的重复逻辑
  */
-export function useCurrentTime(selectedDate: string) {
-  const { minutesToPixels, getCurrentTimePosition, shouldShowCurrentTime: shouldShow } = useTimeUtils();
-  
+export function useTimelineBase(selectedDate: Ref<string>) {
+  const { 
+    minutesToPixels, 
+    pixelsToMinutes, 
+    snapToQuarter, 
+    formatTime,
+    timeLabels, // 直接使用useTimeUtils中的timeLabels computed
+    getCurrentTimePosition,
+    shouldShowCurrentTime: shouldShowBase
+  } = useTimeUtils();
+
+  // 当前时间管理
   const currentTimeTop = ref(0);
   const currentTimeInterval = ref<number | null>(null);
 
@@ -22,8 +32,8 @@ export function useCurrentTime(selectedDate: string) {
    * 判断是否显示当前时间线
    */
   const shouldShowCurrentTime = computed(() => {
-    const isToday = dayjs().isSame(selectedDate, 'day');
-    return isToday && shouldShow();
+    const isToday = dayjs().isSame(selectedDate.value, 'day');
+    return isToday && shouldShowBase();
   });
 
   /**
@@ -65,6 +75,16 @@ export function useCurrentTime(selectedDate: string) {
   });
 
   return {
+    // 时间工具函数
+    minutesToPixels,
+    pixelsToMinutes,
+    snapToQuarter,
+    formatTime,
+    
+    // 时间标签
+    timeLabels,
+    
+    // 当前时间管理
     currentTimeTop,
     shouldShowCurrentTime,
     scrollToCurrentTime,

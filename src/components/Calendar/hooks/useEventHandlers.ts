@@ -1,4 +1,4 @@
-import { ref, computed } from "vue";
+import { ref, computed, nextTick } from "vue";
 import dayjs from "dayjs";
 import type {
   TimeEvent,
@@ -9,6 +9,7 @@ import { formatMultiDayEventTitle } from "../utils/events";
 import { useTimeUtils } from "./useTimeUtils";
 import { useColorUtils } from "./useColorUtils";
 import { useOverlapUtils } from "./useOverlapUtils";
+import { type Ref } from "vue";
 
 /**
  * 事件处理相关的hooks
@@ -18,7 +19,8 @@ export function useEventHandlers(
     selectedDate: string;
     events: any[];
   },
-  emit: any
+  emit: any,
+  newEventElement?: Ref<HTMLElement | null>
 ) {
   const { minutesToPixels, pixelsToMinutes, snapToQuarter } = useTimeUtils();
   const { lightenColor } = useColorUtils();
@@ -155,21 +157,23 @@ export function useEventHandlers(
   const handleTimelineClick = (
     event: MouseEvent,
     dragState: any,
-    onEventClick: (event: TimeEvent) => void
+    onEventClick: (event: TimeEvent) => void,
+    activeEventId?: string | null
   ) => {
-    // 如果正在拖拽，不处理点击
+    // 如果正在拖拽且已经移动，不处理点击
     if (
-      dragState.isDragging ||
-      dragState.isResizing ||
-      dragState.isEventDragging
+      dragState &&
+      ((dragState.isDragging && dragState.hasMoved) ||
+        (dragState.isResizing && dragState.hasMoved) ||
+        (dragState.isEventDragging && dragState.hasMoved))
     ) {
       console.log("正在拖拽中，忽略点击事件");
       return;
     }
 
     // 检查是否刚刚完成拖拽（防止拖拽后立即触发点击）
-    const timeSinceDrag = Date.now() - (dragState.lastDragEndTime || 0);
-    if (timeSinceDrag < 200) {
+    const timeSinceDrag = Date.now() - (dragState?.lastDragEndTime || 0);
+    if (dragState?.lastDragEndTime && timeSinceDrag < 200) {
       console.log("拖拽刚结束，忽略点击事件");
       return;
     }
@@ -183,14 +187,28 @@ export function useEventHandlers(
     const clickedEvent = getEventAtPosition(clickY, event.clientX - rect.left);
     if (clickedEvent) {
       console.log("点击到事件块:", clickedEvent.title);
+      // 点击到事件块时，清空现有的timeBlock
+      if (timeBlock.value) {
+        console.log("点击事件块，清空timeBlock");
+        timeBlock.value = null;
+      }
       onEventClick(clickedEvent);
       return;
     }
 
-    // 如果点击空白区域，清除现有的时间块并创建新的
+    // 如果有事件被选中，禁止创建新的 TimeBlock
+    if (activeEventId) {
+      console.log("有事件被选中，禁止创建新的 TimeBlock");
+      return;
+    }
+
+    // 只有在点击真正空白区域时才创建新的timeBlock
+    // 如果已经存在timeBlock，则清空它
     if (timeBlock.value) {
-      console.log("清除现有时间块，创建新的");
+      console.log("点击空白区域，清空现有timeBlock");
       timeBlock.value = null;
+      emit("event-create-cancel");
+      return; // 直接返回，不创建新的timeBlock
     }
 
     // 创建新的时间块
@@ -205,19 +223,70 @@ export function useEventHandlers(
 
     timeBlock.value = newBlock;
     console.log("创建新时间块:", newBlock);
+
+    // 使用nextTick确保DOM更新完成后再emit
+    nextTick(() => {
+      setTimeout(() => {
+        const timeBlockElement = newEventElement?.value;
+
+        emit("event-created", {
+          event: {
+            ...newBlock,
+            date: props.selectedDate,
+          },
+          el: timeBlockElement,
+        });
+      }, 20);
+    });
   };
 
   /**
    * 切换全天事件显示
    */
   const toggleAllDayEvents = () => {
+    // 切换全天事件显示时清空timeBlock
+    if (timeBlock.value) {
+      console.log("切换全天事件显示，清空timeBlock");
+      timeBlock.value = null;
+    }
+
     showAllDayEvents.value = !showAllDayEvents.value;
   };
 
   /**
    * 处理全天事件点击
    */
-  const handleAllDayEventClick = (event: AllDayEvent, e: MouseEvent) => {
+  const handleAllDayEventClick = (
+    event: AllDayEvent,
+    e: MouseEvent,
+    dragState?: any
+  ) => {
+    // 如果正在拖拽且已经移动，不处理点击
+    if (
+      dragState &&
+      ((dragState.isDragging && dragState.hasMoved) ||
+        (dragState.isResizing && dragState.hasMoved) ||
+        (dragState.isEventDragging && dragState.hasMoved))
+    ) {
+      console.log("正在拖拽中，忽略全天事件点击");
+      return;
+    }
+
+    // 检查是否刚刚完成拖拽（防止拖拽后立即触发点击）
+    if (dragState?.lastDragEndTime) {
+      const timeSinceDrag = Date.now() - dragState.lastDragEndTime;
+      if (timeSinceDrag < 200) {
+        console.log("拖拽刚结束，忽略全天事件点击");
+        return;
+      }
+    }
+
+    // 点击全天事件时清空timeBlock
+    if (timeBlock.value) {
+      console.log("点击全天事件，清空timeBlock");
+      timeBlock.value = null;
+    }
+
     emit("event-click", {
       event,
       el: e.currentTarget as HTMLElement,

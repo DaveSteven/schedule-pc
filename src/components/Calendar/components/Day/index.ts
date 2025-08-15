@@ -1,1 +1,3 @@
-export { default } from './Day.vue';
+import Day from "./Day.vue";
+
+export default Day;

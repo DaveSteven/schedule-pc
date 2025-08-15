@@ -1,1 +1,3 @@
-export { default as Month } from './Month.vue';
+import Month from "./Month.vue";
+
+export default Month;

@@ -1,40 +1,21 @@
-import { ref, computed, onMounted, onUnmounted, type Ref } from 'vue';
+import { ref, computed, onMounted, onUnmounted, type Ref, watch } from 'vue';
 import dayjs from 'dayjs';
-import type { WeekDateInfo } from './types';
+import type { WeekDateInfo, TimeBlock } from './types';
 import { dateUtils, eventUtils } from './utils';
-import { useTimeUtils } from '../../hooks/useTimeUtils';
+import { useTimelineBase } from '../../hooks/useTimelineBase';
+import { useTimelineDrag } from '../../hooks/useTimelineDrag';
 import { useOverlapUtils } from '../../hooks/useOverlapUtils';
 
 /**
  * 周视图时间管理组合函数
  */
 export function useWeekTime() {
-  const { minutesToPixels, getCurrentTimePosition, shouldShowCurrentTime } = useTimeUtils();
+  // 使用通用的时间轴基础功能
+  const { currentTimeTop, shouldShowCurrentTime } = useTimelineBase(ref(dayjs().format("YYYY-MM-DD")));
   
-  const currentTimeTop = ref(0);
-  const currentTimeInterval = ref<number | null>(null);
-
-  const updateCurrentTime = () => {
-    currentTimeTop.value = minutesToPixels(getCurrentTimePosition());
-  };
-
-  const shouldShowCurrentTimeComputed = computed(() => shouldShowCurrentTime());
-
-  onMounted(() => {
-    updateCurrentTime();
-    currentTimeInterval.value = window.setInterval(updateCurrentTime, 60000);
-  });
-
-  onUnmounted(() => {
-    if (currentTimeInterval.value) {
-      clearInterval(currentTimeInterval.value);
-    }
-  });
-
   return {
     currentTimeTop,
-    shouldShowCurrentTime: shouldShowCurrentTimeComputed,
-    updateCurrentTime,
+    shouldShowCurrentTime,
   };
 }
 
@@ -48,19 +29,6 @@ export function useAllDayEvents(events: Ref<any[]>, weekRange: Ref<WeekDateInfo[
   const allDayEvents = computed(() => 
     eventUtils.calculateAllDayEvents(events.value, weekRange.value)
   );
-
-  // 检查是否有日期需要展开/收起功能
-  const hasExpandableDates = computed(() => {
-    return weekRange.value.some((dateInfo) => {
-      const allDayData = getAllDayEventsForDate(dateInfo.date);
-      return allDayData.totalCount > 2;
-    });
-  });
-
-  // 切换全天日程展开状态
-  const toggleAllDayExpanded = () => {
-    isAllDayExpanded.value = !isAllDayExpanded.value;
-  };
 
   // 合并获取指定日期的所有全天日程（跨天+单日）
   const getAllDayEventsForDate = (date: string) => {
@@ -114,6 +82,19 @@ export function useAllDayEvents(events: Ref<any[]>, weekRange: Ref<WeekDateInfo[
       totalCount: allEventsForDate.length,
       visibleCount: limitedCrossDayEvents.length + limitedSingleDayEvents.length,
     };
+  };
+
+  // 检查是否有日期需要展开/收起功能
+  const hasExpandableDates = computed(() => {
+    return weekRange.value.some((dateInfo) => {
+      const allDayData = getAllDayEventsForDate(dateInfo.date);
+      return allDayData.totalCount > 2;
+    });
+  });
+
+  // 切换全天日程展开状态
+  const toggleAllDayExpanded = () => {
+    isAllDayExpanded.value = !isAllDayExpanded.value;
   };
 
   // 获取指定日期用于渲染的跨天日程（只在第一天显示）
@@ -232,15 +213,122 @@ export function useTimeEvents(events: Ref<any[]>, weekRange: Ref<WeekDateInfo[]>
 }
 
 /**
+ * 周视图时间块管理组合函数
+ */
+export function useTimeBlocks() {
+  // 只管理一个全局的timeBlock
+  const timeBlock = ref<TimeBlock | null>(null);
+
+  // 创建时间块
+  const createTimeBlock = (date: string, startTime: number, duration: number = 30) => {
+    // 直接使用时间工具函数，不需要从hook中获取
+    const minutesToPixels = (minutes: number) => minutes; // 1分钟 = 1px
+    
+    const newBlock: TimeBlock = {
+      id: Date.now().toString(),
+      startTime,
+      duration,
+      top: minutesToPixels(startTime),
+      height: minutesToPixels(duration),
+      isNew: true,
+      date,
+    };
+
+    timeBlock.value = newBlock;
+    return newBlock;
+  };
+
+  // 清空时间块
+  const clearTimeBlock = () => {
+    timeBlock.value = null;
+  };
+
+  // 检查是否有时间块
+  const hasTimeBlock = computed(() => {
+    return timeBlock.value !== null;
+  });
+
+  // 获取时间块
+  const getTimeBlock = () => {
+    return timeBlock.value;
+  };
+
+  return {
+    timeBlock,
+    createTimeBlock,
+    clearTimeBlock,
+    hasTimeBlock,
+    getTimeBlock,
+  };
+}
+
+/**
+ * 周视图拖拽管理组合函数
+ */
+export function useWeekDragHandlers(weekRange: Ref<WeekDateInfo[]>) {
+  // 缓存列宽度，避免频繁计算
+  const columnWidthCache = ref<number>(0);
+  
+  // 计算列宽度的函数
+  const calculateColumnWidth = () => {
+    const timelineContainer = document.querySelector('.week-view__timeline-section');
+    if (timelineContainer) {
+      const containerWidth = timelineContainer.clientWidth;
+      const timeLabelsWidth = 70; // 时间标签列的宽度
+      const availableWidth = containerWidth - timeLabelsWidth;
+      const newColumnWidth = availableWidth / 7; // 7天，每列宽度
+      
+      // 只有当列宽度变化超过5px时才更新缓存
+      if (Math.abs(newColumnWidth - columnWidthCache.value) > 5) {
+        columnWidthCache.value = newColumnWidth;
+        console.log('列宽度更新:', newColumnWidth);
+      }
+      
+      return columnWidthCache.value;
+    }
+    return columnWidthCache.value || 200; // 使用缓存值或默认值
+  };
+
+  // 使用通用的拖拽处理hook，配置为周视图模式
+  const dragHandlers = useTimelineDrag({
+    enableXAxisDrag: true, // 周视图支持X轴拖拽（日期切换）
+    enableYAxisDrag: true, // 支持Y轴拖拽（时间调整）
+    enableResize: true,    // 支持大小调整
+    maxTimeHeight: 1440,   // 24小时 * 60分钟
+    minDuration: 15,       // 最小15分钟
+    dateRange: weekRange.value.map(d => d.date),
+    getColumnWidth: calculateColumnWidth,
+    xAxisDragThreshold: 50 // 设置合适的X轴拖拽阈值，需要50px的移动才触发日期切换
+  });
+
+  // 监听窗口大小变化，重新计算列宽度
+  onMounted(() => {
+    const handleResize = () => {
+      calculateColumnWidth();
+    };
+    
+    window.addEventListener('resize', handleResize);
+    
+    // 初始计算
+    calculateColumnWidth();
+    
+    onUnmounted(() => {
+      window.removeEventListener('resize', handleResize);
+    });
+  });
+
+  return dragHandlers;
+}
+
+/**
  * 周视图主要组合函数
  */
 export function useWeekView(selectedDate: Ref<string>, events: Ref<any[]>) {
   // 计算周范围
   const weekRange = computed(() => dateUtils.calculateWeekRange(selectedDate.value));
 
-  // 时间标签
-  const { generateTimeLabels } = useTimeUtils();
-  const timeLabels = computed(() => generateTimeLabels());
+  // 使用通用的时间轴基础功能
+  const timelineBase = useTimelineBase(selectedDate);
 
   // 添加调试日志
   console.log('useWeekView composable:', {
@@ -262,12 +350,21 @@ export function useWeekView(selectedDate: Ref<string>, events: Ref<any[]>) {
   const timeState = useWeekTime();
   const allDayState = useAllDayEvents(events, weekRange);
   const timeEventsState = useTimeEvents(events, weekRange);
+  const timeBlocksState = useTimeBlocks();
+  const dragHandlers = useWeekDragHandlers(weekRange);
 
   return {
     weekRange,
-    timeLabels,
+    timeLabels: timelineBase.timeLabels, // 直接使用timelineBase的timeLabels
+    // 时间工具函数
+    minutesToPixels: timelineBase.minutesToPixels,
+    pixelsToMinutes: timelineBase.pixelsToMinutes,
+    snapToQuarter: timelineBase.snapToQuarter,
+    formatTime: timelineBase.formatTime,
     ...timeState,
     ...allDayState,
     ...timeEventsState,
+    ...timeBlocksState,
+    ...dragHandlers,
   };
 }

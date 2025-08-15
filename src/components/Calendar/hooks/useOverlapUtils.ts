@@ -12,7 +12,7 @@ export function useOverlapUtils() {
     const totalEvents = events.length;
     const width = `${100 / totalEvents}%`;
     const left = `${(currentEventIndex * 100) / totalEvents}%`;
-    const zIndex = 10 + totalEvents - currentEventIndex;
+    const zIndex = 20 + totalEvents - currentEventIndex; // 提高z-index基础值，确保高于timeBlock
 
     return { width, left, zIndex };
   };
@@ -45,7 +45,7 @@ export function useOverlapUtils() {
         groupEvents[0].overlapStyle = {
           width: "100%",
           left: "0%",
-          zIndex: 1,
+          zIndex: 20, // 提高单个事件的z-index，确保高于timeBlock
         };
       }
     });
@@ -81,7 +81,7 @@ export function useOverlapUtils() {
         groupEvents[0].overlapStyle = {
           width: "100%",
           left: "0%",
-          zIndex: 1,
+          zIndex: 20, // 提高单个事件的z-index，确保高于timeBlock
         };
       }
     });

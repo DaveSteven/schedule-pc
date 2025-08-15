@@ -32,8 +32,7 @@ const props = withDefaults(defineProps<MonthProps>(), {
 const emit = defineEmits<{
   dateChange: [date: string];
   eventClick: [event: any];
-  eventDrop: [event: any];
-  eventResize: [event: any];
+  eventChange: [event: any];
 }>();
 
 // Refs
@@ -51,16 +50,7 @@ const transformEventsForFullCalendar = (events: any[]) => {
     borderColor: event.color,
     textColor: "#ffffff",
     extendedProps: {
-      color: event.color,
-      sourceType: event.sourceType,
-      openScopeType: event.openScopeType,
-      roomName: event.roomName,
-      self: event.self,
-      remindType: event.remindType,
-      userName: event.userName,
-      userId: event.userId,
-      userAvatar: event.userAvatar,
-      department: event.department,
+      ...event,
     },
   }));
 };
@@ -137,12 +127,18 @@ const calendarOptions = computed(() => ({
     });
   },
   eventDrop: function (info: any) {
+    const { event, el } = info;
+    const { _def } = event;
+    const { extendedProps = {} } = _def;
     // 处理事件拖拽
-    emit("eventDrop", info.event);
+    emit("eventChange", { ...event, ...extendedProps });
   },
   eventResize: function (info: any) {
+    const { event, el } = info;
+    const { _def } = event;
+    const { extendedProps = {} } = _def;
     // 处理事件大小调整
-    emit("eventResize", info.event);
+    emit("eventChange", { ...event, ...extendedProps });
   },
   // 使用eventClassNames添加自定义CSS类
   eventClassNames: function (arg: any) {

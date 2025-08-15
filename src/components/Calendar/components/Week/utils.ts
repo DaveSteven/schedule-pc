@@ -223,6 +223,7 @@ export const eventUtils = {
           const duration = endMinutes - actualStartMinutes;
 
           return {
+            ...event,
             id: event.id || `event-${Math.random()}`,
             title: formatMultiDayEventTitle(event, dateInfo.date),
             startTime: actualStartMinutes,

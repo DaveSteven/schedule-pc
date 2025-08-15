@@ -1,0 +1,315 @@
+/* 全天日程容器样式 */
+.day-all-events {
+  background: #fff;
+  border-bottom: 1px solid #e8e8e8;
+  padding: 12px 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 1px;
+  min-height: 48px;
+  box-sizing: border-box;
+
+  &__header {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    height: 100%;
+    color: #8c8c8c;
+    min-width: 60px;
+    flex-shrink: 0;
+    cursor: pointer;
+    transition: color 0.2s ease;
+
+    &:hover {
+      color: #666;
+    }
+
+    > div {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 4px;
+      transition: background-color 0.2s ease;
+
+      &:hover {
+        background-color: rgba(0, 0, 0, 0.05);
+      }
+    }
+  }
+
+  &__content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    padding-right: 8px;
+    gap: 8px;
+  }
+
+  &__list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  &__item {
+    display: flex;
+    align-items: center;
+    padding: 6px 12px;
+    border-radius: 4px;
+    color: #333;
+    font-size: 12px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    /* 选中状态样式 */
+    &--active {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      transform: translateY(-1px);
+    }
+  }
+
+  &__title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  &__toggle {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 12px;
+    color: #8c8c8c;
+    cursor: pointer;
+    padding: 4px 0;
+    transition: color 0.2s ease;
+
+    &:hover {
+      color: #666;
+    }
+  }
+
+  &__expand-icon {
+    transition: transform 0.2s ease;
+    flex-shrink: 0;
+
+    &--expanded {
+      transform: rotate(180deg);
+    }
+  }
+}
+
+/* 时间轴容器样式 */
+.day-timeline {
+  position: relative;
+  flex: 1;
+  height: 100%;
+  overflow-y: auto;
+  background: #fff;
+  scroll-behavior: smooth;
+
+  /* 隐藏滚动条 */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+
+  &::-webkit-scrollbar {
+    display: none;
+  }
+
+  /* 禁用滚动状态 */
+  &--scroll-disabled {
+    overflow: hidden !important;
+
+    /* 内容区域仍然可以响应点击事件 */
+    .day-timeline__content {
+      pointer-events: auto;
+    }
+
+    /* 时间标签仍然可见但不可交互 */
+    .day-timeline__labels {
+      pointer-events: none;
+    }
+  }
+
+  &__content {
+    position: relative;
+    height: 1440px; /* 24小时 * 60px */
+    width: 100%;
+    background: #fff;
+    cursor: crosshair;
+
+    /* 时间网格线 - 每小时一条粗线 */
+    &::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      left: 60px;
+      right: 8px;
+      height: 1380px; /* 20小时 * 60px，从01:00到21:00，避免22:00后的分割线 */
+      background-image: repeating-linear-gradient(
+        to bottom,
+        transparent 0px,
+        transparent 59px,
+        #f0f0f0 59px,
+        #f0f0f0 60px
+      );
+      pointer-events: none;
+      z-index: 0;
+    }
+  }
+
+  &__labels {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 60px;
+    height: 100%;
+    border-right: 1px solid #e2e8f0;
+  }
+
+  &__label {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+      sans-serif;
+    user-select: none;
+    pointer-events: none;
+    z-index: 1;
+    font-size: 12px;
+    color: #8c8c8c;
+    font-weight: 400;
+    box-sizing: border-box;
+    position: absolute;
+    left: 0;
+    width: 60px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: translateY(-50%);
+  }
+
+  &__current-line {
+    position: absolute;
+    left: 60px;
+    right: 16px;
+    height: 2px;
+    background: #ff1327;
+    z-index: 1000;
+    pointer-events: none;
+    box-shadow: 0 0 8px rgba(255, 71, 87, 0.3);
+    animation: pulse 2s ease-in-out infinite;
+
+    &::before {
+      content: "";
+      position: absolute;
+      left: -4px;
+      top: -3px;
+      width: 8px;
+      height: 8px;
+      background-color: #ff1327;
+      border-radius: 50%;
+      box-shadow: 0 0 6px rgba(255, 71, 87, 0.6);
+    }
+  }
+
+  &__event {
+    position: absolute;
+    border-radius: 6px;
+    padding: 4px 8px;
+    color: #333;
+    font-size: 12px;
+    line-height: 1.2;
+    overflow: hidden;
+    box-sizing: border-box;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &--dragging {
+      opacity: 0.8;
+      z-index: 1000;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      transform: translateY(-1px);
+    }
+
+    &--active {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      transform: translateY(-1px);
+    }
+  }
+
+  &__event-content {
+    width: 100%;
+    overflow: hidden;
+  }
+
+  &__event-text {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    width: 100%;
+  }
+
+  &__time-block {
+    z-index: 20;
+    transition: box-shadow 0.2s ease;
+    border-radius: 8px;
+    position: absolute;
+    left: 60px;
+    width: calc(100% - 69px);
+    background-color: #e9d8ff;
+    border: 1px solid var(--primary-color, #9f58ff);
+    cursor: move;
+    user-select: none;
+    border-left: 4px solid var(--primary-color, #9f58ff);
+
+    &:hover {
+      // 顶部边缘区域提示
+      &::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 8px;
+        cursor: ns-resize;
+      }
+
+      // 底部边缘区域提示
+      &::after {
+        content: "";
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 8px;
+        cursor: ns-resize;
+      }
+    }
+
+    &--active {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    }
+  }
+
+  &__time-display {
+    padding: 4px 8px;
+    font-size: 12px;
+    color: var(--primary-color, #9f58ff);
+    font-weight: 500;
+  }
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}

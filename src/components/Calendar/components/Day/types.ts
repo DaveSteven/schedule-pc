@@ -75,6 +75,8 @@ export interface DragState {
   originalEventData: { startTime: number; duration: number } | null;
   dragEventPosition: { top: number; startTime: number } | null;
   lastDragEndTime: number | null;
+  hasMoved: boolean; // 新增：标记是否已经移动
+  moveThreshold: number; // 新增：移动阈值（像素）
 }
 
 /**
@@ -91,8 +93,14 @@ export interface DayProps {
 export interface DayEmits {
   "date-change": [date: string];
   "event-click": [{ event: TimeEvent; el: HTMLElement }];
-  "all-day-event-click": [{ event: AllDayEvent; el: HTMLElement }];
-  "event-update": [
-    updateData: { eventId: string; newStartTime: number; newDuration: number }
+  "event-change": [{ event: TimeEvent }];
+  "event-created": [
+    data: {
+      event: TimeBlock;
+      element: HTMLElement;
+      fallbackElement: HTMLElement;
+      hasTimeBlockElement: boolean;
+    }
   ];
+  "event-create-cancel": [];
 }

@@ -21,6 +21,39 @@ export interface WeekEvent {
 }
 
 /**
+ * 时间块接口
+ */
+export interface TimeBlock {
+  id: string;
+  startTime: number;
+  duration: number;
+  top: number;
+  height: number;
+  isNew?: boolean;
+  date: string; // 添加日期字段
+}
+
+/**
+ * 拖拽状态接口
+ */
+export interface DragState {
+  isDragging: boolean;
+  isResizing: boolean;
+  dragType: "move" | "resize-top" | "resize-bottom";
+  currentBlock: TimeBlock | null;
+  startY: number;
+  startX: number;
+  startTop: number;
+  startHeight: number;
+  startTime: number;
+  startDuration: number;
+  startDate: string;
+  hasMoved: boolean;
+  moveThreshold: number;
+  lastDragEndTime: number | null;
+}
+
+/**
  * 全天事件接口
  */
 export interface WeekAllDayEvent {
@@ -72,8 +105,15 @@ export interface WeekProps {
  */
 export interface WeekEmits {
   "date-change": [date: string];
-  "event-click": [event: WeekEvent];
+  "event-click": [{ event: WeekEvent; el: HTMLElement }];
   "event-update": [
     updateData: { eventId: string; newStartTime: number; newDuration: number; newDate: string }
   ];
+  "event-created": [
+    data: {
+      event: TimeBlock;
+      el: HTMLElement;
+    }
+  ];
+  "event-create-cancel": [];
 }
