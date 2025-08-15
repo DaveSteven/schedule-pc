@@ -1,0 +1,44 @@
+{
+  "name": "schedule-pc",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev:mock": "vite --mode mock",
+    "dev": "vite",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@fullcalendar/core": "^6.1.19",
+    "@fullcalendar/daygrid": "^6.1.19",
+    "@fullcalendar/interaction": "^6.1.19",
+    "@fullcalendar/timegrid": "^6.1.19",
+    "@fullcalendar/vue3": "^6.1.19",
+    "@types/lodash": "^4.17.20",
+    "@unocss/reset": "^66.4.2",
+    "@vueuse/components": "^13.6.0",
+    "@vueuse/core": "^13.6.0",
+    "axios": "^1.11.0",
+    "color": "^5.0.0",
+    "dayjs": "^1.11.13",
+    "element-plus": "^2.10.6",
+    "lodash": "^4.17.21",
+    "lunar-javascript": "^1.7.3",
+    "pinia": "^3.0.3",
+    "vue": "^3.5.18",
+    "vue-router": "^4.5.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^6.0.1",
+    "@vue/tsconfig": "^0.7.0",
+    "sass": "^1.90.0",
+    "sass-loader": "^16.0.5",
+    "terser": "^5.43.1",
+    "typescript": "~5.8.3",
+    "unocss": "^66.4.2",
+    "unplugin-element-plus": "^0.10.0",
+    "vite": "^7.1.0",
+    "vue-tsc": "^3.0.5"
+  }
+}

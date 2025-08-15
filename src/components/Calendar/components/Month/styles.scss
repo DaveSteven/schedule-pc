@@ -1,0 +1,218 @@
+// 日历主体样式
+.fc {
+  &.fc-theme-standard {
+    // 表头样式
+    th {
+      text-align: left;
+    }
+
+    // 日期顶部布局
+    .fc-daygrid-day-top {
+      flex-direction: row;
+    }
+
+    // 自定义日期单元格
+    .custom-day-cell {
+      font-size: 18px;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+
+      .day-number {
+        display: inline-block;
+        width: 30px;
+        height: 30px;
+        border-radius: 30px;
+        background-color: #fff;
+        text-align: center;
+        line-height: 30px;
+
+        &.first {
+          width: auto;
+        }
+      }
+
+      .day-lunar {
+        font-size: 14px;
+        color: #333;
+      }
+    }
+
+    // 事件样式覆盖
+    .fc-event-main {
+      color: inherit !important;
+    }
+
+    .fc-event-title {
+      color: inherit !important;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      line-height: 1.2;
+      max-width: 100%;
+      font-weight: 500;
+    }
+
+    // 强制覆盖事件标题颜色
+    .fc-event .fc-event-main .fc-event-title {
+      color: inherit !important;
+    }
+
+    .fc-daygrid-dot-event .fc-event-title {
+      font-weight: 500;
+    }
+
+    // 日期底部样式
+    .fc-daygrid-day-bottom {
+      font-size: 12px;
+      color: #898989;
+    }
+
+    // 更多事件链接样式
+    .fc-daygrid-more-link {
+      color: #666;
+      text-decoration: none;
+      font-size: 11px;
+
+      &:hover {
+        color: var(--el-color-primary);
+        background-color: transparent;
+      }
+    }
+
+    // 事件容器样式
+    .fc-daygrid-event-harness {
+      margin-top: 0;
+
+      &.fc-daygrid-event-harness-abs {
+        position: absolute;
+      }
+    }
+
+    // 事件样式
+    .fc-event {
+      &.custom-event {
+        border-radius: 4px;
+        padding: 0 6px;
+        font-size: 12px;
+        font-weight: 500;
+        min-height: 20px;
+        display: flex;
+        align-items: center;
+        border-top: none;
+        border-right: none;
+        border-bottom: none;
+        border-left: 4px solid var(--event-border-color);
+        background-color: var(--event-bg-color);
+        color: var(--event-text-color);
+
+        // 事件标题
+        .fc-event-title {
+          color: inherit !important;
+          font-weight: 500;
+        }
+
+        // 事件主体
+        .fc-event-main {
+          color: inherit !important;
+        }
+      }
+    }
+
+    // 列头部样式
+    .fc-col-header {
+      .fc-col-header-cell {
+        padding: 8px 6px;
+        font-weight: 500;
+
+        .fc-col-header-cell-cushion {
+          color: #333;
+          text-decoration: none;
+          font-size: 16px;
+
+          &:hover {
+            color: var(--el-color-primary);
+          }
+        }
+      }
+    }
+
+    // 日期网格样式
+    .fc-daygrid-day-frame {
+      min-height: 100px;
+
+      .fc-daygrid-day-bg {
+        background: transparent;
+      }
+    }
+
+    // 滚动条样式
+    .fc-scroller {
+      &::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+
+      &::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 3px;
+      }
+
+      &::-webkit-scrollbar-thumb {
+        background: #c1c1c1;
+        border-radius: 3px;
+
+        &:hover {
+          background: #a8a8a8;
+        }
+      }
+    }
+
+    // 表格边框样式
+    td,
+    th {
+      border: none;
+      border-bottom: 1px solid #f5f5f5;
+    }
+
+    .fc-scrollgrid {
+      border: none;
+    }
+
+    // 今日日期样式
+    .fc-daygrid-day {
+      &.fc-day-today {
+        background-color: #f5f5f5;
+
+        .custom-day-cell {
+          .day-number {
+            background-color: var(--el-color-primary);
+            color: #fff;
+          }
+        }
+      }
+    }
+
+    .fc-highlight {
+      background-color: transparent;
+    }
+
+    .fc-popover {
+      border: none;
+      border-radius: 10px;
+      box-shadow: 0 0 12px rgba(0, 0, 0, 0.15);
+      overflow: hidden;
+
+      &-header {
+        background: #fff;
+        padding: 10px 10px 0 10px;
+      }
+    }
+
+    .fc-more-popover-misc {
+      .custom-day-cell {
+        display: none;
+      }
+    }
+  }
+}

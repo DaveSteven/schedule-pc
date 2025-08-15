@@ -1,0 +1,243 @@
+<template>
+  <div class="month-calendar">
+    <FullCalendar
+      ref="calendarRef"
+      :options="calendarOptions"
+      @viewDidMount="handleCalendarChange"
+    />
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed, watch } from "vue";
+import FullCalendar from "@fullcalendar/vue3";
+import dayGridPlugin from "@fullcalendar/daygrid";
+import interactionPlugin from "@fullcalendar/interaction";
+import { lightenColor } from "@/utils";
+import "./styles.scss";
+import { getLunarDisplayText } from "../../utils/date";
+
+// Props
+interface MonthProps {
+  selectedDate: string;
+  events: any[];
+}
+
+const props = withDefaults(defineProps<MonthProps>(), {
+  selectedDate: () => new Date().toISOString().split("T")[0],
+  events: () => [],
+});
+
+// Emits
+const emit = defineEmits<{
+  dateChange: [date: string];
+  eventClick: [event: any];
+  eventDrop: [event: any];
+  eventResize: [event: any];
+}>();
+
+// Refs
+const calendarRef = ref();
+
+// 转换事件数据为FullCalendar期望的格式
+const transformEventsForFullCalendar = (events: any[]) => {
+  return events.map((event) => ({
+    id: event.id,
+    title: event.title,
+    start: event.start,
+    end: event.end,
+    allDay: event.allDay,
+    backgroundColor: event.color,
+    borderColor: event.color,
+    textColor: "#ffffff",
+    extendedProps: {
+      color: event.color,
+      sourceType: event.sourceType,
+      openScopeType: event.openScopeType,
+      roomName: event.roomName,
+      self: event.self,
+      remindType: event.remindType,
+      userName: event.userName,
+      userId: event.userId,
+      userAvatar: event.userAvatar,
+      department: event.department,
+    },
+  }));
+};
+
+// FullCalendar 配置（仅月视图）
+const calendarOptions = computed(() => ({
+  plugins: [dayGridPlugin, interactionPlugin],
+  initialView: "dayGridMonth",
+  headerToolbar: false as const,
+  height: "100%",
+  locale: "zh-cn",
+  events: transformEventsForFullCalendar(props.events || []),
+  initialDate: props.selectedDate,
+  editable: true,
+  selectable: true,
+  selectMirror: true,
+  weekends: true,
+  dayMaxEvents: true,
+  dayPopoverFormat: { day: "numeric" },
+  moreLinkClick: function (args: any) {
+    console.log("moreLinkClick", args.allSegs);
+  },
+  moreLinkContent: function (args: any) {
+    return "还有" + args.num + "项";
+  },
+  // 自定义日期单元格内容，让日期在左侧展示
+  dayCellContent: function (arg: any) {
+    const date = arg.date;
+    const dayNumber = date.getDate();
+    const month = date.getMonth() + 1;
+
+    let title = dayNumber;
+
+    const getLunarText = getLunarDisplayText({
+      year: date.getFullYear(),
+      month: date.getMonth() + 1,
+      day: date.getDate(),
+    });
+
+    if (dayNumber === 1) {
+      title = `${month}月${dayNumber}日`;
+
+      return {
+        html: `
+        <div class="custom-day-cell">
+          <span class="day-number first">${title}</span>
+          <div class="day-lunar">${getLunarText}</div>
+        </div>
+      `,
+      };
+    }
+
+    return {
+      html: `
+        <div class="custom-day-cell">
+          <span class="day-number">${title}</span>
+          <div class="day-lunar">${getLunarText}</div>
+        </div>
+      `,
+    };
+  },
+  select: function (arg: any) {
+    // 处理日期选择
+    emit("dateChange", arg.startStr);
+  },
+  eventClick: function (info: any) {
+    // 处理事件点击
+    const { event, el } = info;
+    const { _def } = event;
+    const { extendedProps = {} } = _def;
+    emit("eventClick", {
+      event: { ...event, ...extendedProps },
+      el,
+    });
+  },
+  eventDrop: function (info: any) {
+    // 处理事件拖拽
+    emit("eventDrop", info.event);
+  },
+  eventResize: function (info: any) {
+    // 处理事件大小调整
+    emit("eventResize", info.event);
+  },
+  // 使用eventClassNames添加自定义CSS类
+  eventClassNames: function (arg: any) {
+    const event = arg.event;
+    const color = event.extendedProps?.color || "#3b82f6";
+
+    return ["custom-event", `event-color-${color.replace("#", "")}`];
+  },
+  // 使用eventContent自定义事件内容
+  eventContent: function (arg: any) {
+    const event = arg.event;
+    const title = event.title || "无标题";
+
+    return {
+      html: `<div class="fc-event-title">${title}</div>`,
+    };
+  },
+  // 使用eventDidMount在事件挂载后设置样式
+  eventDidMount: function (arg: any) {
+    const event = arg.event;
+    const el = arg.el;
+    const color = event.extendedProps?.color || "#3b82f6";
+    const fontColor = "#000";
+
+    // 使用CSS变量设置样式
+    el.style.setProperty("--event-bg-color", lightenColor(color));
+    el.style.setProperty("--event-border-color", color);
+    el.style.setProperty("--event-text-color", color);
+
+    // 设置基础样式
+    el.style.backgroundColor = "var(--event-bg-color)";
+    el.style.border = "none";
+    el.style.borderLeft = "4px solid var(--event-border-color)";
+    el.style.borderRadius = "4px";
+    el.style.padding = "0 6px";
+    el.style.color = fontColor;
+    el.style.fontSize = "12px";
+    el.style.fontWeight = "500";
+    el.style.minHeight = "20px";
+    el.style.display = "flex";
+    el.style.alignItems = "center";
+
+    // 强制设置事件标题的颜色，使用!important覆盖默认样式
+    const eventTitle = el.querySelector(".fc-event-title");
+    if (eventTitle) {
+      eventTitle.style.setProperty("color", fontColor, "important");
+    }
+
+    const eventMain = el.querySelector(".fc-event-main");
+    if (eventMain) {
+      eventMain.style.setProperty("color", fontColor, "important");
+    }
+  },
+}));
+
+// 监听props变化，更新日历
+watch(
+  () => props.selectedDate,
+  (newDate) => {
+    if (calendarRef.value && newDate) {
+      calendarRef.value.getApi().gotoDate(newDate);
+    }
+  }
+);
+
+watch(
+  () => props.events,
+  () => {
+    if (calendarRef.value) {
+      calendarRef.value.getApi().refetchEvents();
+    }
+  },
+  { deep: true }
+);
+
+// 处理日历视图变化
+const handleCalendarChange = (arg: any) => {
+  // 可以在这里处理视图变化逻辑
+  console.log("Month view mounted:", arg);
+};
+
+// 暴露方法给父组件
+defineExpose({
+  getApi: () => calendarRef.value?.getApi(),
+  gotoDate: (date: string) => calendarRef.value?.getApi().gotoDate(date),
+  refetchEvents: () => calendarRef.value?.getApi().refetchEvents(),
+});
+</script>
+
+<style scoped lang="scss">
+.month-calendar {
+  width: 100%;
+  height: 100%;
+  background: #fff;
+  border-radius: 8px;
+  overflow: hidden;
+}
+</style>
