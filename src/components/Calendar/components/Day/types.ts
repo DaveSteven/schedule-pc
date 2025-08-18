@@ -23,11 +23,11 @@ export interface TimeEvent {
  * 时间块接口
  */
 export interface TimeBlock {
-  id: string;
-  startTime: number;
-  duration: number;
-  top: number;
-  height: number;
+  id?: string;
+  startTime: number; // 分钟数，从00:00开始
+  duration: number; // 持续时间（分钟）
+  top: number; // CSS top位置
+  height: number; // CSS高度
   isNew?: boolean;
 }
 
@@ -87,20 +87,16 @@ export interface DayProps {
   events?: any[];
 }
 
+export interface EmitEvent {
+  event: TimeEvent;
+  el: HTMLElement;
+}
+
 /**
  * Day组件Emits接口
  */
 export interface DayEmits {
   "date-change": [date: string];
-  "event-click": [{ event: TimeEvent; el: HTMLElement }];
-  "event-change": [{ event: TimeEvent }];
-  "event-created": [
-    data: {
-      event: TimeBlock;
-      element: HTMLElement;
-      fallbackElement: HTMLElement;
-      hasTimeBlockElement: boolean;
-    }
-  ];
-  "event-create-cancel": [];
+  "event-click": [EmitEvent];
+  "event-change": [EmitEvent];
 }

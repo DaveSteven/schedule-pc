@@ -18,12 +18,21 @@ import type { UserSwitchType } from "@/stores/app";
 import type { EventData } from "@/components/EventPopover/types";
 import EventDetail from "@/components/EventDetail";
 import EventForm from "@/components/EventForm";
+import { useCalendarEvents } from "@/components/Calendar/composables/useCalendarEvents";
+import type { EventChangeData } from "@/components/Calendar/types/events";
 
 // 获取 stores
 const eventsStore = useEventsStore();
 const calendarStore = useCalendarStore();
 const { events } = storeToRefs(eventsStore);
 const { isToday } = storeToRefs(calendarStore);
+
+// 使用统一的事件处理
+const {
+  handleDateChange: handleCalendarDateChange,
+  handleEventClick: handleCalendarEventClick,
+  handleEventChange: handleCalendarEventChange,
+} = useCalendarEvents();
 
 // 当前选中的 tab
 const activeTab = ref(0);
@@ -56,9 +65,12 @@ const popoverTargetElement = ref<HTMLElement | null>(null);
 const formTargetElement = ref<HTMLElement | null>(null);
 const eventFormData = ref<EventData | null>(null);
 
-// 事件处理方法
+// 事件处理方法 - 使用统一的事件处理
 const handleEventClick = (arg: any) => {
   console.log("handleEventClick:", arg);
+
+  // 调用统一的事件处理
+  handleCalendarEventClick(arg);
 
   // 显示Popover
   popoverEventData.value = arg.event;
@@ -66,22 +78,13 @@ const handleEventClick = (arg: any) => {
   popoverVisible.value = true;
 };
 
-const handleEventChange = (event: any) => {
-  console.log("handleEventChange:", event);
-};
-
-const handleEventCreate = (arg: any) => {
-  setTimeout(() => {
+const handleEventChange = (info: EventChangeData) => {
+  console.log("event change:", info);
+  if (!info.event.id) {
+    formTargetElement.value = info.el;
     formVisible.value = true;
-    formTargetElement.value = arg.el;
-    eventFormData.value = arg.event;
-  }, 100);
-};
-
-const handleEventCreateCancel = () => {
-  console.log("handleEventCreateCancel");
-  formVisible.value = false;
-  formTargetElement.value = null;
+    eventFormData.value = info.event as any;
+  }
 };
 
 // Popover事件处理
@@ -89,6 +92,12 @@ const handlePopoverClose = () => {
   popoverVisible.value = false;
   popoverEventData.value = null;
   popoverTargetElement.value = null;
+};
+
+const handleFormClose = () => {
+  formVisible.value = false;
+  formTargetElement.value = null;
+  eventFormData.value = null;
 };
 
 // 处理 tab 切换
@@ -109,15 +118,17 @@ const fetchScheduleData = async () => {
   }
 };
 
-// 监听日期变化
-const handleDateChange = async (date: string) => {
-  console.log(date);
-};
+// 监听日期变化 - 使用统一的事件处理
+const handleDateChange = async (data: any) => {
+  console.log("Date change:", data);
 
-// 监听日历变化
-const handleCalendarChange = async (calendarIds: string[]) => {
-  eventsStore.setSelectedCalendarIds(calendarIds);
-  await fetchScheduleData();
+  // 调用统一的事件处理
+  handleCalendarDateChange(data);
+
+  // 原有的业务逻辑
+  if (data.date) {
+    await fetchScheduleData();
+  }
 };
 
 // 处理上一个时间段
@@ -215,8 +226,6 @@ onMounted(async () => {
             @date-change="handleDateChange"
             @event-click="handleEventClick"
             @event-change="handleEventChange"
-            @event-created="handleEventCreate"
-            @event-create-cancel="handleEventCreateCancel"
           />
         </div>
       </div>
@@ -236,9 +245,10 @@ onMounted(async () => {
     <EventPopover
       :visible="formVisible"
       :target-element="formTargetElement"
-      :width="420"
+      :width="450"
+      @close="handleFormClose"
     >
-      <!-- <EventForm v-model="eventFormData" /> -->
+      <EventForm v-model="eventFormData!" />
     </EventPopover>
   </div>
 </template>

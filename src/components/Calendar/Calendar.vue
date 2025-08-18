@@ -2,6 +2,12 @@
 import { Day, Week, Month } from "@/components/Calendar";
 import type { ViewType } from "@/stores/calendar";
 import type { EventItem } from "./utils/events";
+import type {
+  CalendarEmits,
+  EventClickData,
+  EventChangeData,
+} from "./types/events";
+import { createEventEmitter } from "./utils/eventEmitter";
 
 interface Props {
   viewType: ViewType;
@@ -9,36 +15,23 @@ interface Props {
   events: EventItem[];
 }
 
-interface Emits {
-  (e: "date-change", date: string): void;
-  (e: "event-click", arg: any): void;
-  (e: "event-change", event: any): void;
-  (e: "event-created", arg: any): void;
-  (e: "event-create-cancel"): void;
-}
+defineProps<Props>();
+const emit = defineEmits<CalendarEmits>();
 
-const props = defineProps<Props>();
-const emit = defineEmits<Emits>();
+// 创建事件发射器
+const eventEmitter = createEventEmitter(emit);
 
 // 事件处理方法
 const handleDateChange = (date: string) => {
-  emit("date-change", date);
+  eventEmitter.emitDateChange(date);
 };
 
-const handleEventClick = (arg: any) => {
-  emit("event-click", arg);
+const handleEventClick = (info: EventClickData) => {
+  eventEmitter.emitEventClick(info.event, info.el);
 };
 
-const handleEventChange = (event: any) => {
-  emit("event-change", event);
-};
-
-const handleEventCreated = (arg: any) => {
-  emit("event-created", arg);
-};
-
-const handleEventCreateCancel = () => {
-  emit("event-create-cancel");
+const handleEventChange = (info: EventChangeData) => {
+  eventEmitter.emitEventChange(info.event, info.el);
 };
 </script>
 
@@ -58,14 +51,14 @@ const handleEventCreateCancel = () => {
       :events="events"
       @date-change="handleDateChange"
       @event-click="handleEventClick"
+      @event-change="handleEventChange"
     />
     <Day
       v-if="viewType === 'day'"
       :events="events"
+      @date-change="handleDateChange"
       @event-click="handleEventClick"
       @event-change="handleEventChange"
-      @event-created="handleEventCreated"
-      @event-create-cancel="handleEventCreateCancel"
     />
   </div>
 </template>

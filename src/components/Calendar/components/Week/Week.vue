@@ -71,7 +71,6 @@ const handleEventClick = (event: WeekEvent, e: MouseEvent) => {
   // 点击事件时清空timeBlock
   if (hasTimeBlock.value) {
     clearTimeBlock();
-    emit("event-create-cancel");
   }
 
   emit("event-click", { event, el: targetElement });
@@ -100,7 +99,6 @@ const handleTimeColumnClick = (event: MouseEvent, date: string) => {
     // 点击到事件块时，清空timeBlock
     if (timeBlock.value) {
       clearTimeBlock();
-      emit("event-create-cancel");
     }
     handleEventClick(clickedEvent, event);
     return;
@@ -110,23 +108,12 @@ const handleTimeColumnClick = (event: MouseEvent, date: string) => {
   if (timeBlock.value) {
     console.log("点击空白区域，清空现有timeBlock");
     clearTimeBlock();
-    emit("event-create-cancel");
     return;
   }
 
   // 创建新的时间块
   const newBlock = createTimeBlock(date, snappedMinutes, 30);
   console.log("创建新时间块:", newBlock);
-
-  // 使用nextTick确保DOM更新完成后再emit
-  nextTick(() => {
-    setTimeout(() => {
-      emit("event-created", {
-        event: newBlock,
-        el: target,
-      });
-    }, 20);
-  });
 };
 
 // 获取指定位置的事件

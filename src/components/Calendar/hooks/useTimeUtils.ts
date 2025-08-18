@@ -89,6 +89,57 @@ export function useTimeUtils() {
    */
   const timeLabels = computed(() => generateTimeLabels());
 
+  /**
+   * 根据分钟数计算开始和结束时间
+   */
+  const calculateTimeRange = (
+    startMinutes: number,
+    duration: number,
+    baseDate: string
+  ) => {
+    const baseDateObj = new Date(baseDate);
+
+    // 计算开始时间
+    const startDate = new Date(baseDateObj);
+    startDate.setHours(Math.floor(startMinutes / 60), startMinutes % 60, 0, 0);
+
+    // 计算结束时间
+    const endDate = new Date(startDate);
+    endDate.setMinutes(endDate.getMinutes() + duration);
+
+    // 格式化日期和时间
+    const formatDate = (date: Date) => {
+      return date.toISOString().split("T")[0]; // YYYY-MM-DD
+    };
+
+    const formatTime = (date: Date) => {
+      return date.toTimeString().slice(0, 5); // HH:mm
+    };
+
+    return {
+      startDate: formatDate(startDate),
+      endDate: formatDate(endDate),
+      startTime: formatTime(startDate),
+      endTime: formatTime(endDate),
+    };
+  };
+
+  /**
+   * 检查时间是否跨天
+   */
+  const isTimeCrossDay = (
+    startMinutes: number,
+    duration: number,
+    baseDate: string
+  ) => {
+    const { startDate, endDate } = calculateTimeRange(
+      startMinutes,
+      duration,
+      baseDate
+    );
+    return startDate !== endDate;
+  };
+
   return {
     generateTimeLabels,
     minutesToPixels,
@@ -99,5 +150,7 @@ export function useTimeUtils() {
     getCurrentTimePosition,
     shouldShowCurrentTime,
     timeLabels,
+    calculateTimeRange,
+    isTimeCrossDay,
   };
 }

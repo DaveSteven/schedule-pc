@@ -198,7 +198,6 @@ onMounted(() => {
       if (timeBlock.value) {
         console.log("点击其他地方，清空timeBlock");
         timeBlock.value = null;
-        emit("event-create-cancel");
       }
     }
   };

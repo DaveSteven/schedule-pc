@@ -22,7 +22,12 @@ export function useEventHandlers(
   emit: any,
   newEventElement?: Ref<HTMLElement | null>
 ) {
-  const { minutesToPixels, pixelsToMinutes, snapToQuarter } = useTimeUtils();
+  const {
+    minutesToPixels,
+    pixelsToMinutes,
+    snapToQuarter,
+    calculateTimeRange,
+  } = useTimeUtils();
   const { lightenColor } = useColorUtils();
   const { processOverlappingEvents } = useOverlapUtils();
 
@@ -207,13 +212,11 @@ export function useEventHandlers(
     if (timeBlock.value) {
       console.log("点击空白区域，清空现有timeBlock");
       timeBlock.value = null;
-      emit("event-create-cancel");
       return; // 直接返回，不创建新的timeBlock
     }
 
     // 创建新的时间块
     const newBlock = {
-      id: Date.now().toString(),
       startTime: snappedMinutes,
       duration: 30,
       top: minutesToPixels(snappedMinutes),
@@ -229,10 +232,18 @@ export function useEventHandlers(
       setTimeout(() => {
         const timeBlockElement = newEventElement?.value;
 
-        emit("event-created", {
+        // 计算准确的日期和时间
+        const timeRange = calculateTimeRange(
+          snappedMinutes,
+          30,
+          props.selectedDate
+        );
+
+        emit("event-change", {
           event: {
             ...newBlock,
-            date: props.selectedDate,
+            start: `${timeRange.startDate} ${timeRange.startTime}`,
+            end: `${timeRange.endDate} ${timeRange.endTime}`,
           },
           el: timeBlockElement,
         });

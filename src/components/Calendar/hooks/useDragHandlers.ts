@@ -243,7 +243,10 @@ export function useDragHandlers(emit: any) {
       };
 
       // 触发事件变更
-      emit("event-change", { ...dragState.value.currentEvent });
+      emit("event-change", {
+        event: { ...dragState.value.currentEvent },
+        el: null,
+      });
 
       // 延迟清理状态，防止立即触发点击事件
       setTimeout(() => {

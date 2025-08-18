@@ -109,11 +109,4 @@ export interface WeekEmits {
   "event-update": [
     updateData: { eventId: string; newStartTime: number; newDuration: number; newDate: string }
   ];
-  "event-created": [
-    data: {
-      event: TimeBlock;
-      el: HTMLElement;
-    }
-  ];
-  "event-create-cancel": [];
 }
