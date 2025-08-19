@@ -1,9 +1,18 @@
 <script setup lang="ts">
-import { toRef, ref, nextTick, watch, computed } from "vue";
+import {
+  toRef,
+  ref,
+  nextTick,
+  watch,
+  computed,
+  onMounted,
+  onUnmounted,
+} from "vue";
 import dayjs from "dayjs";
 import { useWeekView } from "./composables";
 import { useColorUtils } from "../../hooks/useColorUtils";
-import type { WeekEvent, TimeBlock } from "./types";
+import type { WeekEvent, CalendarEmits, WeekAllDayEvent } from "./types";
+import { EventType, type BaseEventData } from "../../types/events";
 import EventForm from "@/components/EventForm/EventForm.vue";
 import EventPopover from "@/components/EventPopover/EventPopover.vue";
 
@@ -20,7 +29,10 @@ const props = defineProps({
 });
 
 // Emits
-const emit = defineEmits();
+const emit = defineEmits<CalendarEmits>();
+
+// 响应式数据
+const activeEventId = ref<string | null>(null);
 
 // 使用共享hooks
 const { lightenColor } = useColorUtils();
@@ -113,23 +125,74 @@ const timeBlockElement = ref<HTMLElement | null>(null);
 // 添加一个变量来记录拖动开始时的原始时间块信息
 const originalTimeBlockInfo = ref<any>(null);
 
-// 计算时间块的左侧位置（用于绝对定位）
-const getTimeBlockLeftPosition = (date: string) => {
-  const dateIndex = weekRange.value.findIndex((d) => d.date === date);
-  if (dateIndex === -1) return 0;
+// 计算timeBlock的fixed位置
+const getTimeBlockFixedPosition = () => {
+  if (!timeBlock.value) return null;
 
-  // 由于时间列使用 flex: 1，我们需要计算实际的列宽
-  // 这里我们使用容器的总宽度除以列数来计算每列的宽度
-  const container = document.querySelector(".week-view__time-column-container");
-  if (container) {
-    const containerWidth = container.clientWidth;
-    const columnCount = weekRange.value.length;
-    const columnWidth = containerWidth / columnCount;
-    return dateIndex * columnWidth;
+  const container = document.querySelector(
+    ".week-view__time-column-container"
+  ) as HTMLElement;
+  if (!container) return null;
+
+  const containerRect = container.getBoundingClientRect();
+  const dateIndex = weekRange.value.findIndex(
+    (d) => d.date === timeBlock.value!.date
+  );
+  if (dateIndex === -1) return null;
+
+  const columnWidth = containerRect.width / weekRange.value.length;
+  const left = containerRect.left + dateIndex * columnWidth;
+
+  return {
+    top: containerRect.top + timeBlock.value.top,
+    left: left,
+    width: columnWidth,
+    height: timeBlock.value.height,
+  };
+};
+
+// 获取fixed样式
+const getFixedStyles = (): Record<string, string | number> => {
+  const fixedPos = getTimeBlockFixedPosition();
+  if (!fixedPos) return {};
+
+  return {
+    top: `${fixedPos.top}px`,
+    left: `${fixedPos.left}px`,
+    width: `${fixedPos.width}px`,
+    height: `${fixedPos.height}px`,
+  };
+};
+
+// 更新fixed位置
+const updateFixedPosition = () => {
+  if (timeBlock.value) {
+    // 触发响应式更新
+    nextTick(() => {
+      // 样式会自动更新
+    });
   }
+};
 
-  // 如果无法获取容器，使用估算值
-  return dateIndex * 200;
+// 使用ResizeObserver监听容器大小变化
+const setupResizeObserver = () => {
+  const container = document.querySelector(".week-view__time-column-container");
+  if (!container) return;
+
+  const resizeObserver = new ResizeObserver(() => {
+    if (timeBlock.value) {
+      updateFixedPosition();
+    }
+  });
+
+  resizeObserver.observe(container);
+
+  // 在组件卸载时清理
+  onUnmounted(() => {
+    resizeObserver.disconnect();
+  });
+
+  return resizeObserver;
 };
 
 // 获取时间列的宽度
@@ -197,9 +260,29 @@ const handleFormTimeChanged = (timeData: { start: string; end: string }) => {
 
 // 处理表单提交
 const handleFormSubmit = (eventData: any) => {
+  // 将表单数据转换为BaseEventData格式
+  const baseEvent: BaseEventData = {
+    id: eventData.id,
+    title: eventData.title,
+    start: eventData.start,
+    end: eventData.end,
+    color: eventData.color,
+    sourceType: 1, // 默认为日程
+    openScopeType: 1, // 默认为公开
+    allDay: eventData.allDay,
+    tuCname: undefined,
+    scheduleType: 1, // 默认为工作
+    roomName: undefined,
+    self: true,
+    remindType: undefined,
+    isTechEvent: false,
+    isMultiDay: false,
+    ids: undefined,
+  };
+  
   // 发射事件创建事件
-  emit("event-change", {
-    event: eventData,
+  emit(EventType.EVENT_CHANGE, {
+    event: baseEvent,
     el: formTargetElement.value as HTMLElement,
   });
 
@@ -381,13 +464,16 @@ const watchDragState = () => {
             from: originalTimeBlockInfo.value.date,
             to: timeBlock.value.date,
           });
-          
+
           // 不再手动恢复时间，因为 useTimelineDrag.ts 已经正确处理
-          console.log("Week: 日期切换已由 useTimelineDrag.ts 处理，保持当前时间:", {
-            currentStartTime: timeBlock.value.startTime,
-            currentDuration: timeBlock.value.duration,
-            newDate: timeBlock.value.date,
-          });
+          console.log(
+            "Week: 日期切换已由 useTimelineDrag.ts 处理，保持当前时间:",
+            {
+              currentStartTime: timeBlock.value.startTime,
+              currentDuration: timeBlock.value.duration,
+              newDate: timeBlock.value.date,
+            }
+          );
         }
 
         // 更新表单数据以反映拖动后的时间和日期
@@ -419,6 +505,9 @@ const watchDragState = () => {
         nextTick(() => {
           formTargetElement.value = timeBlockElement.value as HTMLElement;
           showForm.value = true;
+
+          // 更新fixed位置
+          updateFixedPosition();
         });
       }
     }, 300); // 增加到300ms，确保拖拽状态完全重置
@@ -433,8 +522,9 @@ watch(
 );
 
 // 处理事件点击
-const handleEventClick = (event: WeekEvent, e: MouseEvent) => {
+const handleEventClick = (event: WeekEvent | WeekAllDayEvent, e: MouseEvent) => {
   const targetElement = e.currentTarget as HTMLElement;
+  activeEventId.value = event.id;
 
   // 在拖拽过程中，保护 timeBlock 不被清空
   if (dragState.value.isDragging || dragState.value.isResizing) {
@@ -452,7 +542,31 @@ const handleEventClick = (event: WeekEvent, e: MouseEvent) => {
     }
   }
   safeClearTimeBlock();
-  emit("event-click", { event, el: targetElement });
+  // 将事件转换为BaseEventData格式
+  const baseEvent: BaseEventData = {
+    id: event.id,
+    title: event.title,
+    start: 'startTime' in event 
+      ? dayjs(event.date).add(event.startTime, 'minute').format('YYYY-MM-DD HH:mm')
+      : `${event.date} 00:00`,
+    end: 'startTime' in event 
+      ? dayjs(event.date).add(event.startTime + event.duration, 'minute').format('YYYY-MM-DD HH:mm')
+      : `${event.date} 23:59`,
+    color: event.color,
+    sourceType: 1, // 默认为日程
+    openScopeType: 1, // 默认为公开
+    allDay: event.allDay,
+    tuCname: undefined,
+    scheduleType: 1, // 默认为工作
+    roomName: undefined,
+    self: true,
+    remindType: undefined,
+    isTechEvent: false,
+    isMultiDay: false,
+    ids: undefined,
+  };
+  
+  emit(EventType.EVENT_CLICK, { event: baseEvent, el: targetElement });
 };
 
 // 处理时间列点击事件
@@ -580,7 +694,34 @@ const handleTimeBlockMouseDown = (event: MouseEvent) => {
   else {
     startTimeBlockDrag(event, timeBlock.value, "move");
   }
+
+  // 拖动开始后更新fixed位置
+  nextTick(() => {
+    updateFixedPosition();
+  });
 };
+
+// 组件挂载后设置ResizeObserver
+onMounted(() => {
+  setupResizeObserver();
+  
+  // 添加全局点击事件监听器
+  const handleGlobalClick = (e: MouseEvent) => {
+    const target = e.target as HTMLElement;
+    
+    // 清空activeEventId
+    if (!target.closest(".week-view__all-day-event") && !target.closest(".week-view__time-event")) {
+      activeEventId.value = null;
+    }
+  };
+  
+  document.addEventListener("click", handleGlobalClick);
+  
+  // 清理函数
+  onUnmounted(() => {
+    document.removeEventListener("click", handleGlobalClick);
+  });
+});
 </script>
 
 <template>
@@ -661,6 +802,7 @@ const handleTimeBlockMouseDown = (event: MouseEvent) => {
                   dayjs(),
                   'day'
                 ),
+                'week-view__all-day-event--active': activeEventId === crossDayEvent.id,
               }"
               :style="{
                 backgroundColor: crossDayEvent.color
@@ -702,6 +844,7 @@ const handleTimeBlockMouseDown = (event: MouseEvent) => {
                   'week-view__all-day-event--past': dayjs(
                     dateInfo.date
                   ).isBefore(dayjs(), 'day'),
+                  'week-view__all-day-event--active': activeEventId === singleDayEvent.id,
                 }"
                 :style="{
                   backgroundColor: singleDayEvent.color
@@ -776,6 +919,7 @@ const handleTimeBlockMouseDown = (event: MouseEvent) => {
                   dayjs(),
                   'day'
                 ),
+                'week-view__event-block--active': activeEventId === event.id,
               }"
               :style="{
                 top: `${event.top}px`,
@@ -795,10 +939,10 @@ const handleTimeBlockMouseDown = (event: MouseEvent) => {
             </div>
           </div>
 
-          <!-- 时间块 - 使用绝对定位，放在容器下面 -->
+          <!-- 时间块 - 使用fixed定位 -->
           <div
             v-if="timeBlock"
-            class="week-view__time-block"
+            class="week-view__time-block week-view__time-block--fixed"
             :class="{
               'week-view__time-block--dragging':
                 dragState.isDragging &&
@@ -807,12 +951,7 @@ const handleTimeBlockMouseDown = (event: MouseEvent) => {
                 dragState.isResizing &&
                 dragState.currentBlock?.id === timeBlock.id,
             }"
-            :style="{
-              top: `${timeBlock?.top}px`,
-              height: `${timeBlock?.height}px`,
-              left: `${getTimeBlockLeftPosition(timeBlock.date)}px`,
-              width: `${getTimeColumnWidth()}px`,
-            }"
+            :style="getFixedStyles()"
             @mousedown="handleTimeBlockMouseDown"
             ref="timeBlockElement"
           >

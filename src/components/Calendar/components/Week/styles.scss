@@ -148,6 +148,12 @@
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
 
+    // 选中状态样式
+    &--active {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      transform: translateY(-1px);
+    }
+
     &--past {
       opacity: 0.6;
       background-color: #f3f4f6 !important;
@@ -331,6 +337,12 @@
       box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
 
+    // 选中状态样式
+    &--active {
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+      transform: translateY(-1px);
+    }
+
     &--past {
       opacity: 0.6;
 
@@ -359,6 +371,13 @@
     cursor: move;
     user-select: none;
     border-left: 4px solid var(--primary-color, #9f58ff);
+
+    // fixed定位样式
+    &--fixed {
+      position: fixed;
+      z-index: 9999; // 高于EventPopover (10000) 和 Mask (9998)
+      pointer-events: auto;
+    }
 
     &:hover {
       // 顶部边缘区域提示

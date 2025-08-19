@@ -255,18 +255,21 @@
   }
 
   &__time-block {
-    z-index: 20000; // 确保在遮罩层之上
     transition: box-shadow 0.2s ease;
     border-radius: 8px;
-    position: absolute;
-    left: 60px;
-    width: calc(100% - 69px);
     background-color: #e9d8ff;
     border: 1px solid var(--primary-color, #9f58ff);
     cursor: move;
     user-select: none;
     border-left: 4px solid var(--primary-color, #9f58ff);
     pointer-events: auto; // 确保可以接收鼠标事件
+
+    // 固定使用fixed定位
+    &--fixed {
+      position: fixed;
+      z-index: 10000; // 高于EventPopover (10000) 和 Mask (9998)
+      pointer-events: auto;
+    }
 
     &:hover {
       // 顶部边缘区域提示

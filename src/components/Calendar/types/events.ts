@@ -3,19 +3,33 @@
 import type { ViewType } from "@/stores/calendar";
 
 /**
- * 基础事件数据接口
+ * 基础事件数据接口 - 与mock数据格式保持一致
  */
 export interface BaseEventData {
-  id: string;
+  id?: string;
   title: string;
+  start: string;
+  end: string;
   color: string;
-  allDay: boolean;
+  sourceType: 1 | 2 | 3; // 1日程  2会议  3任务
+  openScopeType: 1 | 2 | 3; // 1公开  2仅参与人可见  3仅个人可见
+  tuCname?: string; // 发起人
+  scheduleType?: 1 | 2 | 3; // 1工作  2出差  3休假
+  allDay?: boolean;
+  roomName?: string;
+  self?: boolean; // 是否为自己的日程
+  remindType?: number; // 提醒类型
+  isTechEvent?: boolean; // 是否为科技事件
+  isMultiDay?: boolean; // 是否为跨天事件
+  ids?: any[];
+  [key: string]: any;
 }
 
 /**
  * 时间事件接口（用于Day和Week视图）
  */
 export interface TimeEvent extends BaseEventData {
+  id: string;
   startTime: number; // 分钟数，从00:00开始
   duration: number; // 持续时间（分钟）
   top: number; // CSS top位置
@@ -31,8 +45,6 @@ export interface TimeEvent extends BaseEventData {
  * 月视图事件接口
  */
 export interface MonthEvent extends BaseEventData {
-  start: any; // dayjs.Dayjs
-  end: any; // dayjs.Dayjs
   firstCol: number; // 开始列索引
   lastCol: number; // 结束列索引
   row: number; // 行索引
@@ -66,6 +78,16 @@ export interface EventChangeData {
 }
 
 /**
+ * 事件更新事件数据（用于拖拽更新等）
+ */
+export interface EventUpdateData {
+  eventId: string;
+  newStartTime: number;
+  newDuration: number;
+  newDate: string;
+}
+
+/**
  * 日期变更事件数据
  */
 export interface DateChangeData {
@@ -84,10 +106,7 @@ export interface ViewChangeData {
  * 统一的事件发射器接口
  */
 export interface CalendarEmits {
-  // 日期相关事件
   "date-change": [data: DateChangeData];
-
-  // 事件相关事件
   "event-click": [data: EventClickData];
   "event-change": [data: EventChangeData];
 }

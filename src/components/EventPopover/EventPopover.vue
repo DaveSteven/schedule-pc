@@ -260,7 +260,7 @@ onUnmounted(() => {
 
 // Mask 样式
 .event-popover__mask {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   width: 100vw;

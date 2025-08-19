@@ -87,16 +87,5 @@ export interface DayProps {
   events?: any[];
 }
 
-export interface EmitEvent {
-  event: TimeEvent;
-  el: HTMLElement;
-}
-
-/**
- * Day组件Emits接口
- */
-export interface DayEmits {
-  "date-change": [date: string];
-  "event-click": [EmitEvent];
-  "event-change": [EmitEvent];
-}
+// 导出统一的CalendarEmits类型
+export type { CalendarEmits } from "../../types/events";

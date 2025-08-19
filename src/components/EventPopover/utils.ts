@@ -119,7 +119,7 @@ export function calculatePopoverPosition(options: PopoverPositionOptions) {
     },
   };
 
-  // 新的定位逻辑：始终保持左侧策略，优先 left，如果左侧空间不足则向右移动调整
+  // 新的定位逻辑：优先左侧，但如果会覆盖目标元素则直接选择右侧
   let bestPosition = "left";
   let finalPosition = positions.left;
 
@@ -129,53 +129,76 @@ export function calculatePopoverPosition(options: PopoverPositionOptions) {
     bestPosition = "left";
     finalPosition = positions.left;
   }
-  // 2. 如果左侧空间不足，尝试向右移动调整
+  // 2. 如果左侧空间不足，检查是否会覆盖目标元素
   else if (
     adjustedSpaceLeft < accuratePopoverRect.width + margin &&
     spaceRight > 0
   ) {
-    // console.log("决策: 左侧空间不足，尝试向右移动调整");
-    // 计算需要向右移动的距离来增加左侧空间
+    // 计算如果向右移动调整后，popover 是否会覆盖目标元素
     const leftSpaceNeeded =
       accuratePopoverRect.width + margin - adjustedSpaceLeft;
     const maxRightShift = Math.min(leftSpaceNeeded, spaceRight);
 
     if (maxRightShift > 0) {
-      // console.log(`向右移动 ${maxRightShift}px 来增加左侧空间`);
-      bestPosition = "left-adjusted";
-
-      // 计算调整后的位置，确保不超出视口边界
+      // 计算调整后的位置
       const adjustedX =
         targetRect.left -
         accuratePopoverRect.width -
         margin +
         offset.x +
         maxRightShift;
-      const finalX = Math.max(leftSafeMargin, adjustedX); // 确保不超出左侧安全距离
+      const finalX = Math.max(leftSafeMargin, adjustedX);
 
-      finalPosition = {
-        x: finalX,
-        y: targetRect.top + offset.y,
-        canFit: true,
-      };
+      // 检查是否会覆盖目标元素
+      const popoverRightEdge = finalX + accuratePopoverRect.width;
+      const targetLeftEdge = targetRect.left;
 
-      // console.log("左侧空间调整坐标计算:", {
-      //   originalX:
-      //     targetRect.left - accuratePopoverRect.width - margin + offset.x,
-      //   rightShift: maxRightShift,
-      //   adjustedX,
-      //   finalX,
-      //   leftSafeMargin,
-      //   willFitInViewport:
-      //     finalX + accuratePopoverRect.width <= viewportWidth - margin,
-      // });
+      if (popoverRightEdge >= targetLeftEdge) {
+        // 会覆盖目标元素，直接选择右侧位置
+        // console.log("决策: 左侧调整会覆盖目标元素，选择右侧位置");
+        if (positions.right.canFit) {
+          bestPosition = "right";
+          finalPosition = positions.right;
+        } else {
+          // 如果右侧也不够，尝试其他位置
+          if (positions["top-left"].canFit) {
+            bestPosition = "top-left";
+            finalPosition = positions["top-left"];
+          } else if (positions.top.canFit) {
+            bestPosition = "top";
+            finalPosition = positions.top;
+          } else if (positions["bottom-left"].canFit) {
+            bestPosition = "bottom-left";
+            finalPosition = positions["bottom-left"];
+          } else if (positions.bottom.canFit) {
+            bestPosition = "bottom";
+            finalPosition = positions.bottom;
+          }
+        }
+      } else {
+        // 不会覆盖目标元素，使用调整后的左侧位置
+        // console.log(`决策: 左侧空间调整成功，向右移动 ${maxRightShift}px`);
+        bestPosition = "left-adjusted";
+        finalPosition = {
+          x: finalX,
+          y: targetRect.top + offset.y,
+          canFit: true,
+        };
+      }
     } else {
-      // console.log("左侧空间调整失败，继续尝试其他位置");
-      // 如果调整失败，继续尝试其他位置
+      // 调整失败，尝试其他位置
       if (positions["top-left"].canFit) {
-        // console.log("决策: 选择 top-left 位置");
         bestPosition = "top-left";
         finalPosition = positions["top-left"];
+      } else if (positions.top.canFit) {
+        bestPosition = "top";
+        finalPosition = positions.top;
+      } else if (positions["bottom-left"].canFit) {
+        bestPosition = "bottom-left";
+        finalPosition = positions["bottom-left"];
+      } else if (positions.bottom.canFit) {
+        bestPosition = "bottom";
+        finalPosition = positions.bottom;
       }
     }
   }

@@ -100,13 +100,5 @@ export interface WeekProps {
   events?: any[]; // 事件列表
 }
 
-/**
- * Week组件Emits接口
- */
-export interface WeekEmits {
-  "date-change": [date: string];
-  "event-click": [{ event: WeekEvent; el: HTMLElement }];
-  "event-update": [
-    updateData: { eventId: string; newStartTime: number; newDuration: number; newDate: string }
-  ];
-}
+// 导出统一的CalendarEmits类型
+export type { CalendarEmits } from "../../types/events";

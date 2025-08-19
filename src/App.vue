@@ -12,6 +12,6 @@ import zhCn from "element-plus/es/locale/lang/zh-cn";
 
 <style>
 #app {
-  @apply fixed inset-0;
+  @apply absolute inset-0;
 }
 </style>

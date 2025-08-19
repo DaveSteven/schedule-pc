@@ -22,16 +22,16 @@ const emit = defineEmits<CalendarEmits>();
 const eventEmitter = createEventEmitter(emit);
 
 // 事件处理方法
-const handleDateChange = (date: string) => {
-  eventEmitter.emitDateChange(date);
+const handleDateChange = (data: { date: string }) => {
+  eventEmitter.emitDateChange(data.date);
 };
 
-const handleEventClick = (info: EventClickData) => {
-  eventEmitter.emitEventClick(info.event, info.el);
+const handleEventClick = (data: EventClickData) => {
+  eventEmitter.emitEventClick(data.event, data.el);
 };
 
-const handleEventChange = (info: EventChangeData) => {
-  eventEmitter.emitEventChange(info.event, info.el);
+const handleEventChange = (data: EventChangeData) => {
+  eventEmitter.emitEventChange(data.event, data.el);
 };
 </script>
 
@@ -41,7 +41,6 @@ const handleEventChange = (info: EventChangeData) => {
       v-if="viewType === 'month'"
       :selected-date="selectedDate"
       :events="events"
-      @date-change="handleDateChange"
       @event-click="handleEventClick"
       @event-change="handleEventChange"
     />

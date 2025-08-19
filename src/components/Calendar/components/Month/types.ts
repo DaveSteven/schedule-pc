@@ -4,12 +4,12 @@ export interface MonthEvent {
   id: string;
   title: string;
   start: any; // dayjs.Dayjs
-  end: any;   // dayjs.Dayjs
+  end: any; // dayjs.Dayjs
   color: string;
   allDay: boolean;
   firstCol: number; // 开始列索引
-  lastCol: number;  // 结束列索引
-  row: number;      // 行索引
+  lastCol: number; // 结束列索引
+  row: number; // 行索引
   isVisible: boolean;
   isAbsolute: boolean;
   absoluteTop: number;
@@ -21,8 +21,5 @@ export interface MonthProps {
   events?: EventItem[];
 }
 
-export interface MonthEmits {
-  (e: 'event-click', event: MonthEvent): void;
-  (e: 'date-click', date: string): void;
-  (e: 'month-change', month: string): void;
-}
+// 导出统一的CalendarEmits类型
+export type { CalendarEmits } from "../../types/events";

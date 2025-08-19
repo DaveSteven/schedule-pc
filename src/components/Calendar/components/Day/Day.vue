@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, watch, nextTick } from "vue";
-import type { TimeEvent, DayProps, DayEmits } from "./types";
+import { ref, onMounted, onUnmounted, watch, nextTick } from "vue";
+import type { TimeEvent, DayProps, CalendarEmits } from "./types";
+import { EventType, type BaseEventData } from "../../types/events";
 import { useTimeUtils } from "../../hooks/useTimeUtils";
 import { useCurrentTime } from "../../hooks/useCurrentTime";
 import { useDragHandlers } from "../../hooks/useDragHandlers";
@@ -16,7 +17,7 @@ const props = withDefaults(defineProps<DayProps>(), {
 });
 
 // Emits
-const emit = defineEmits<DayEmits>();
+const emit = defineEmits<CalendarEmits>();
 
 // 响应式数据
 const timelineContainer = ref<HTMLElement | null>(null);
@@ -46,6 +47,68 @@ const {
   toggleAllDayEvents,
 } = useEventHandlers(props, emit, newEventElement);
 
+// 计算timeBlock的fixed位置
+const getTimeBlockFixedPosition = () => {
+  if (!timelineContainer.value || !timeBlock.value) return null;
+
+  const contentElement = timelineContainer.value.querySelector(
+    ".day-timeline__content"
+  ) as HTMLElement;
+  if (!contentElement) return null;
+
+  const contentRect = contentElement.getBoundingClientRect();
+
+  return {
+    top: contentRect.top + timeBlock.value.top,
+    left: contentRect.left + 60, // 60px是时间标签宽度
+    width: contentRect.width - 69, // 69px是左右边距
+    height: timeBlock.value.height,
+  };
+};
+
+// 获取fixed样式
+const getFixedStyles = (): Record<string, string | number> => {
+  const fixedPos = getTimeBlockFixedPosition();
+  if (!fixedPos) return {};
+
+  return {
+    top: `${fixedPos.top}px`,
+    left: `${fixedPos.left}px`,
+    width: `${fixedPos.width}px`,
+    height: `${fixedPos.height}px`,
+  };
+};
+
+// 更新fixed位置
+const updateFixedPosition = () => {
+  if (timeBlock.value) {
+    // 触发响应式更新
+    nextTick(() => {
+      // 样式会自动更新
+    });
+  }
+};
+
+// 使用ResizeObserver监听容器大小变化，替代滚动事件
+const setupResizeObserver = () => {
+  if (!timelineContainer.value) return;
+
+  const resizeObserver = new ResizeObserver(() => {
+    if (timeBlock.value) {
+      updateFixedPosition();
+    }
+  });
+
+  resizeObserver.observe(timelineContainer.value);
+
+  // 在组件卸载时清理
+  onUnmounted(() => {
+    resizeObserver.disconnect();
+  });
+
+  return resizeObserver;
+};
+
 // 处理表单时间变化
 const handleFormTimeChanged = (timeData: { start: string; end: string }) => {
   if (timeBlock.value) {
@@ -68,9 +131,29 @@ const handleFormTimeChanged = (timeData: { start: string; end: string }) => {
 
 // 处理表单提交
 const handleFormSubmit = (eventData: any) => {
+  // 将表单数据转换为BaseEventData格式
+  const baseEvent: BaseEventData = {
+    id: eventData.id,
+    title: eventData.title,
+    start: eventData.start,
+    end: eventData.end,
+    color: eventData.color,
+    sourceType: 1, // 默认为日程
+    openScopeType: 1, // 默认为公开
+    allDay: eventData.allDay,
+    tuCname: undefined,
+    scheduleType: 1, // 默认为工作
+    roomName: undefined,
+    self: true,
+    remindType: undefined,
+    isTechEvent: false,
+    isMultiDay: false,
+    ids: undefined,
+  };
+  
   // 发射事件创建事件
-  emit("event-change", {
-    event: eventData,
+  emit(EventType.EVENT_CHANGE, {
+    event: baseEvent,
     el: newEventElement.value as HTMLElement,
   });
 
@@ -171,6 +254,9 @@ const watchDragState = () => {
         console.log("拖动结束后更新表单目标元素:", newEventElement.value);
         formTargetElement.value = newEventElement.value;
         showForm.value = true;
+
+        // 更新fixed位置
+        updateFixedPosition();
       } else {
         console.warn("拖动结束后未找到时间块元素引用");
       }
@@ -224,7 +310,7 @@ const handleAllDayEventClick = (event: any, e: MouseEvent, dragState: any) => {
     activeEventId.value = null; // 取消时间事件的选中状态
   }
 
-  emit("event-click", {
+  emit(EventType.EVENT_CLICK, {
     event,
     el: e.currentTarget as HTMLElement,
   });
@@ -266,8 +352,29 @@ const handleEventClick = (event: TimeEvent, e: MouseEvent) => {
 
   const targetElement = e.currentTarget as HTMLElement;
   activeEventId.value = event.id;
-  emit("event-click", {
-    event,
+  
+  // 将TimeEvent转换为BaseEventData格式
+  const baseEvent: BaseEventData = {
+    id: event.id,
+    title: event.title,
+    start: dayjs(props.selectedDate).add(event.startTime, 'minute').format('YYYY-MM-DD HH:mm'),
+    end: dayjs(props.selectedDate).add(event.startTime + event.duration, 'minute').format('YYYY-MM-DD HH:mm'),
+    color: event.color,
+    sourceType: 1, // 默认为日程
+    openScopeType: 1, // 默认为公开
+    allDay: event.allDay,
+    tuCname: undefined,
+    scheduleType: 1, // 默认为工作
+    roomName: undefined,
+    self: true,
+    remindType: undefined,
+    isTechEvent: false,
+    isMultiDay: false,
+    ids: undefined,
+  };
+  
+  emit(EventType.EVENT_CLICK, {
+    event: baseEvent,
     el: targetElement,
   });
 };
@@ -311,6 +418,11 @@ const handleTimeBlockMouseDown = (event: MouseEvent) => {
   else {
     startTimeBlockDrag(event, timeBlock.value, "move");
   }
+
+  // 拖动开始后更新fixed位置
+  nextTick(() => {
+    updateFixedPosition();
+  });
 };
 
 // 生命周期
@@ -351,9 +463,16 @@ onMounted(() => {
 
   document.addEventListener("click", handleGlobalClick);
 
+  // 设置ResizeObserver监听容器变化
+  setupResizeObserver();
+
+  // 添加窗口resize事件监听器
+  window.addEventListener("resize", updateFixedPosition);
+
   // 在组件卸载时清理事件监听器
   onUnmounted(() => {
     document.removeEventListener("click", handleGlobalClick);
+    window.removeEventListener("resize", updateFixedPosition);
   });
 });
 </script>
@@ -482,11 +601,8 @@ onMounted(() => {
       <div
         v-if="timeBlock"
         ref="newEventElement"
-        class="day-timeline__time-block"
-        :style="{
-          top: `${timeBlock.top}px`,
-          height: `${timeBlock.height}px`,
-        }"
+        class="day-timeline__time-block day-timeline__time-block--fixed"
+        :style="getFixedStyles()"
         @mousedown.stop="(e) => handleTimeBlockMouseDown(e)"
       >
         <div class="day-timeline__time-display">
