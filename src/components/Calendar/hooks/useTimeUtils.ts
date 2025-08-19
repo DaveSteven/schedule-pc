@@ -38,14 +38,13 @@ export function useTimeUtils() {
    */
   const snapToQuarter = (minutes: number): number => {
     const clampedMinutes = Math.max(0, Math.min(1440, minutes));
-    const hour = Math.floor(clampedMinutes / 60);
-    const hourStart = hour * 60;
-
-    if (Math.abs(clampedMinutes - hourStart) <= 7.5) {
-      return hourStart;
-    }
-
-    return Math.round(clampedMinutes / 15) * 15;
+    
+    // 计算到最近的15分钟间隔的距离
+    const quarter = Math.round(clampedMinutes / 15);
+    const snappedMinutes = quarter * 15;
+    
+    // 确保结果在有效范围内
+    return Math.max(0, Math.min(1440, snappedMinutes));
   };
 
   /**

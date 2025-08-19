@@ -105,11 +105,30 @@ export function useDragHandlers(emit: any) {
       // 从底部调整大小
       const newHeight = Math.max(15, dragState.value.startHeight + deltaY);
       const newDuration = pixelsToMinutes(newHeight);
+      
+      // 先计算新的结束时间，然后吸附到15分钟间隔
       const newEndTime = snapToQuarter(dragState.value.startTime + newDuration);
-
-      if (newEndTime <= 1440) {
-        block.duration = newDuration;
-        block.height = minutesToPixels(newDuration);
+      
+      // 基于吸附后的结束时间重新计算持续时间
+      const snappedDuration = newEndTime - dragState.value.startTime;
+      
+      console.log("resize-bottom 调试:", {
+        originalStartTime: dragState.value.startTime,
+        newHeight,
+        newDuration,
+        newEndTime,
+        snappedDuration,
+        deltaY
+      });
+      
+      if (newEndTime <= 1440 && snappedDuration >= 15) {
+        block.duration = snappedDuration;
+        block.height = minutesToPixels(snappedDuration);
+        
+        console.log("resize-bottom 更新完成:", {
+          finalDuration: block.duration,
+          finalHeight: block.height
+        });
       }
     }
   };

@@ -57,7 +57,9 @@ import type { Props, Emits } from "./types";
  * />
  */
 
-const props = defineProps<Props>();
+const props = withDefaults(defineProps<Props>(), {
+  pointerEvents: "auto",
+});
 const emit = defineEmits<Emits>();
 
 const popoverRef = ref<HTMLElement>();
@@ -77,7 +79,7 @@ const computedWidth = computed(() => {
 
 // 计算Popover位置
 const updatePosition = async () => {
-  console.log("props.targetElement", props.targetElement);
+  // console.log("props.targetElement", props.targetElement);
 
   if (!props.visible || !props.targetElement || !popoverRef.value) {
     return;
@@ -258,14 +260,14 @@ onUnmounted(() => {
 
 // Mask 样式
 .event-popover__mask {
-  position: fixed;
+  position: absolute;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
   background: transparent;
   z-index: 9998;
-  pointer-events: auto;
+  pointer-events: all;
   user-select: none;
   -webkit-user-select: none;
   -moz-user-select: none;

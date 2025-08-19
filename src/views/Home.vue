@@ -17,7 +17,6 @@ import EventPopover from "@/components/EventPopover";
 import type { UserSwitchType } from "@/stores/app";
 import type { EventData } from "@/components/EventPopover/types";
 import EventDetail from "@/components/EventDetail";
-import EventForm from "@/components/EventForm";
 import { useCalendarEvents } from "@/components/Calendar/composables/useCalendarEvents";
 import type { EventChangeData } from "@/components/Calendar/types/events";
 
@@ -59,11 +58,8 @@ const viewType = computed(() => calendarStore.viewType);
 
 // Popover相关状态
 const popoverVisible = ref(false);
-const formVisible = ref(false);
 const popoverEventData = ref<EventData | null>(null);
 const popoverTargetElement = ref<HTMLElement | null>(null);
-const formTargetElement = ref<HTMLElement | null>(null);
-const eventFormData = ref<EventData | null>(null);
 
 // 事件处理方法 - 使用统一的事件处理
 const handleEventClick = (arg: any) => {
@@ -80,11 +76,8 @@ const handleEventClick = (arg: any) => {
 
 const handleEventChange = (info: EventChangeData) => {
   console.log("event change:", info);
-  if (!info.event.id) {
-    formTargetElement.value = info.el;
-    formVisible.value = true;
-    eventFormData.value = info.event as any;
-  }
+  // 事件变更处理，现在由各个视图组件内部处理
+  handleCalendarEventChange(info);
 };
 
 // Popover事件处理
@@ -92,12 +85,6 @@ const handlePopoverClose = () => {
   popoverVisible.value = false;
   popoverEventData.value = null;
   popoverTargetElement.value = null;
-};
-
-const handleFormClose = () => {
-  formVisible.value = false;
-  formTargetElement.value = null;
-  eventFormData.value = null;
 };
 
 // 处理 tab 切换
@@ -239,16 +226,6 @@ onMounted(async () => {
       :width="300"
     >
       <EventDetail :event-data="popoverEventData" />
-    </EventPopover>
-
-    <!-- 日程表单 -->
-    <EventPopover
-      :visible="formVisible"
-      :target-element="formTargetElement"
-      :width="450"
-      @close="handleFormClose"
-    >
-      <EventForm v-model="eventFormData!" />
     </EventPopover>
   </div>
 </template>

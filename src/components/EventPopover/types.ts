@@ -45,6 +45,7 @@ export interface Props {
   targetElement: HTMLElement | null;
   title?: string;
   width?: string | number; // 动态设置宽度，支持字符串（如 '300px'）或数字（如 300）
+  pointerEvents?: "none" | "auto" | "all";
 }
 
 export interface Emits {

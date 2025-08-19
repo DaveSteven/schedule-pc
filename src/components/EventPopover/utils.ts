@@ -119,165 +119,29 @@ export function calculatePopoverPosition(options: PopoverPositionOptions) {
     },
   };
 
-  // 新的定位逻辑：优先 bottom-left，然后 bottom 不够时优先 left
-  let bestPosition = "bottom-left";
-  let finalPosition = positions["bottom-left"];
+  // 新的定位逻辑：始终保持左侧策略，优先 left，如果左侧空间不足则向右移动调整
+  let bestPosition = "left";
+  let finalPosition = positions.left;
 
-  // 预先检查底部空间是否足够
-  const bottomSpaceNeeded = accuratePopoverRect.height + margin;
-  const hasEnoughBottomSpace = spaceBottom >= bottomSpaceNeeded;
-
-  // 检查 event 是否偏下（距离底部较近）
-  const isEventNearBottom = targetRect.bottom > viewportHeight * 0.6; // 降低阈值，更早检测到偏下情况
-
-  // 添加调试日志
-  console.log("=== Popover 定位调试信息 ===");
-  console.log("视口尺寸:", { width: viewportWidth, height: viewportHeight });
-  console.log("Event 位置:", {
-    top: targetRect.top,
-    bottom: targetRect.bottom,
-    left: targetRect.left,
-    right: targetRect.right,
-    width: targetRect.width,
-    height: targetRect.height,
-  });
-  console.log("Popover 尺寸:", {
-    domWidth: popoverRect.width,
-    domHeight: popoverRect.height,
-    computedWidth: accuratePopoverRect.width,
-    computedHeight: accuratePopoverRect.height,
-    providedWidth: width,
-    sizeSource: width !== undefined ? "Props" : "DOM",
-  });
-  console.log("可用空间:", {
-    top: spaceTop,
-    bottom: spaceBottom,
-    left: spaceLeft,
-    right: spaceRight,
-    adjustedLeft: adjustedSpaceLeft,
-    leftSafeMargin,
-  });
-  console.log("底部空间检测:", {
-    bottomSpaceNeeded,
-    hasEnoughBottomSpace,
-    threshold: viewportHeight * 0.6,
-    isEventNearBottom,
-  });
-  console.log("各位置是否可容纳:", {
-    "bottom-left": positions["bottom-left"].canFit,
-    left: positions.left.canFit,
-    right: positions.right.canFit,
-    "top-left": positions["top-left"].canFit,
-    top: positions.top.canFit,
-  });
-
-  // 计算左侧空间调整的可能性
-  const leftSpaceNeeded =
-    accuratePopoverRect.width + margin - adjustedSpaceLeft;
-  const canAdjustLeft = leftSpaceNeeded > 0 && spaceRight > 0;
-  console.log("左侧空间调整分析:", {
-    leftSpaceNeeded,
-    canAdjustLeft,
-    maxPossibleRightShift: canAdjustLeft
-      ? Math.min(leftSpaceNeeded, spaceRight)
-      : 0,
-    originalSpaceLeft: spaceLeft,
-    adjustedSpaceLeft,
-    leftSafeMargin,
-  });
-
-  // 1. 如果底部空间明显不足，直接选择左侧位置
-  if (!hasEnoughBottomSpace && positions.left.canFit) {
-    console.log("决策: 底部空间不足，选择左侧位置");
+  // 1. 优先尝试左侧位置
+  if (positions.left.canFit) {
+    // console.log("决策: 选择左侧位置");
     bestPosition = "left";
     finalPosition = positions.left;
   }
-  // 2. 优先 bottom-left，但如果 event 偏下则优先考虑 top 或 left
-  else if (isEventNearBottom) {
-    if (positions.left.canFit) {
-      console.log("决策: Event 偏下，选择左侧位置");
-      bestPosition = "left";
-      finalPosition = positions.left;
-    } else if (positions.top.canFit) {
-      console.log("决策: Event 偏下，左侧空间不足，选择上方位置");
-      bestPosition = "top";
-      finalPosition = positions.top;
-    } else if (
-      adjustedSpaceLeft < accuratePopoverRect.width + margin &&
-      spaceRight > 0
-    ) {
-      console.log("决策: Event 偏下，尝试左侧空间调整");
-      // 尝试左侧空间调整
-      const leftSpaceNeeded =
-        accuratePopoverRect.width + margin - adjustedSpaceLeft;
-      const maxRightShift = Math.min(leftSpaceNeeded, spaceRight);
-
-      if (maxRightShift > 0) {
-        console.log(`向右移动 ${maxRightShift}px 来增加左侧空间`);
-        bestPosition = "left-adjusted";
-
-        // 计算调整后的位置，确保不超出视口边界
-        const adjustedX =
-          targetRect.left -
-          accuratePopoverRect.width -
-          margin +
-          offset.x +
-          maxRightShift;
-        const finalX = Math.max(leftSafeMargin, adjustedX); // 确保不超出左侧安全距离
-
-        finalPosition = {
-          x: finalX,
-          y: targetRect.top + offset.y,
-          canFit: true,
-        };
-
-        console.log("左侧空间调整坐标计算:", {
-          originalX:
-            targetRect.left - accuratePopoverRect.width - margin + offset.x,
-          rightShift: maxRightShift,
-          adjustedX,
-          finalX,
-          willFitInViewport:
-            finalX + accuratePopoverRect.width <= viewportWidth - margin,
-        });
-      } else {
-        console.log("左侧空间调整失败，继续尝试其他位置");
-        // 如果调整失败，继续尝试其他位置
-        if (positions["top-left"].canFit) {
-          console.log("决策: 选择 top-left 位置");
-          bestPosition = "top-left";
-          finalPosition = positions["top-left"];
-        }
-      }
-    } else {
-      console.log("决策: Event 偏下，所有左侧位置都不可用，选择上方位置");
-      bestPosition = "top";
-      finalPosition = positions.top;
-    }
-  } else if (positions["bottom-left"].canFit) {
-    console.log("决策: 选择 bottom-left 位置");
-    bestPosition = "bottom-left";
-    finalPosition = positions["bottom-left"];
-  }
-  // 3. bottom 不够时，优先 left
-  else if (positions.left.canFit) {
-    console.log("决策: bottom 不够，选择左侧位置");
-    bestPosition = "left";
-    finalPosition = positions.left;
-  }
-  // 4. 如果 bottom 和 left 都不够，尝试左侧空间调整（非 Event 偏下情况）
+  // 2. 如果左侧空间不足，尝试向右移动调整
   else if (
     adjustedSpaceLeft < accuratePopoverRect.width + margin &&
     spaceRight > 0
   ) {
-    console.log("决策: 尝试左侧空间调整");
+    // console.log("决策: 左侧空间不足，尝试向右移动调整");
     // 计算需要向右移动的距离来增加左侧空间
     const leftSpaceNeeded =
       accuratePopoverRect.width + margin - adjustedSpaceLeft;
     const maxRightShift = Math.min(leftSpaceNeeded, spaceRight);
 
     if (maxRightShift > 0) {
-      console.log(`向右移动 ${maxRightShift}px 来增加左侧空间`);
+      // console.log(`向右移动 ${maxRightShift}px 来增加左侧空间`);
       bestPosition = "left-adjusted";
 
       // 计算调整后的位置，确保不超出视口边界
@@ -295,52 +159,53 @@ export function calculatePopoverPosition(options: PopoverPositionOptions) {
         canFit: true,
       };
 
-      console.log("左侧空间调整坐标计算:", {
-        originalX:
-          targetRect.left - accuratePopoverRect.width - margin + offset.x,
-        rightShift: maxRightShift,
-        adjustedX,
-        finalX,
-        leftSafeMargin,
-        willFitInViewport:
-          finalX + accuratePopoverRect.width <= viewportWidth - margin,
-      });
+      // console.log("左侧空间调整坐标计算:", {
+      //   originalX:
+      //     targetRect.left - accuratePopoverRect.width - margin + offset.x,
+      //   rightShift: maxRightShift,
+      //   adjustedX,
+      //   finalX,
+      //   leftSafeMargin,
+      //   willFitInViewport:
+      //     finalX + accuratePopoverRect.width <= viewportWidth - margin,
+      // });
     } else {
-      console.log("左侧空间调整失败，继续尝试其他位置");
+      // console.log("左侧空间调整失败，继续尝试其他位置");
       // 如果调整失败，继续尝试其他位置
       if (positions["top-left"].canFit) {
-        console.log("决策: 选择 top-left 位置");
+        // console.log("决策: 选择 top-left 位置");
         bestPosition = "top-left";
         finalPosition = positions["top-left"];
       }
     }
   }
-  // 5. 如果左边调整失败，尝试向右平移
-  else if (spaceRight >= accuratePopoverRect.width + margin) {
-    console.log("决策: 向右平移");
-    // 向右平移，与 event 顶部对齐
-    bestPosition = "right";
-    finalPosition = {
-      x: targetRect.right + margin + offset.x,
-      y: targetRect.top + offset.y,
-      canFit: true,
-    };
-  }
-  // 6. 如果右边也不够，尝试 top-left
+  // 3. 如果左侧调整失败，尝试 top-left
   else if (positions["top-left"].canFit) {
-    console.log("决策: 选择 top-left 位置");
+    // console.log("决策: 选择 top-left 位置");
     bestPosition = "top-left";
     finalPosition = positions["top-left"];
   }
-  // 7. 最后尝试 top
+  // 4. 如果 top-left 也不够，尝试 top
   else if (positions.top.canFit) {
-    console.log("决策: 选择 top 位置");
+    // console.log("决策: 选择 top 位置");
     bestPosition = "top";
     finalPosition = positions.top;
   }
-  // 8. 如果都不行，选择空间最大的位置
+  // 5. 如果顶部空间也不够，尝试 bottom-left
+  else if (positions["bottom-left"].canFit) {
+    // console.log("决策: 选择 bottom-left 位置");
+    bestPosition = "bottom-left";
+    finalPosition = positions["bottom-left"];
+  }
+  // 6. 如果 bottom-left 也不够，尝试 bottom
+  else if (positions.bottom.canFit) {
+    // console.log("决策: 选择 bottom 位置");
+    bestPosition = "bottom";
+    finalPosition = positions.bottom;
+  }
+  // 7. 如果都不行，选择空间最大的位置
   else {
-    console.log("决策: 选择空间最大的位置");
+    // console.log("决策: 选择空间最大的位置");
     const spaces = {
       top: spaceTop,
       bottom: spaceBottom,
@@ -359,23 +224,23 @@ export function calculatePopoverPosition(options: PopoverPositionOptions) {
     finalPosition = positions[bestPosition as keyof typeof positions];
   }
 
-  console.log("最终选择的位置:", bestPosition);
-  if (bestPosition === "left-adjusted") {
-    console.log("左侧空间调整详情:", {
-      originalLeftSpace: spaceLeft,
-      adjustedLeftSpace: adjustedSpaceLeft,
-      leftSafeMargin,
-      neededSpace: accuratePopoverRect.width + margin,
-      rightShiftApplied: accuratePopoverRect.width + margin - adjustedSpaceLeft,
-      finalLeftSpace:
-        adjustedSpaceLeft +
-        (accuratePopoverRect.width + margin - adjustedSpaceLeft),
-      finalX: finalPosition.x,
-      leftSafeDistance: finalPosition.x - leftSafeMargin,
-      explanation: "向右移动来增加左侧可用空间，保持左侧安全距离",
-    });
-  }
-  console.log("最终坐标:", { x: finalPosition.x, y: finalPosition.y });
+  // console.log("最终选择的位置:", bestPosition);
+  // if (bestPosition === "left-adjusted") {
+  //   console.log("左侧空间调整详情:", {
+  //     originalLeftSpace: spaceLeft,
+  //     adjustedLeftSpace: adjustedSpaceLeft,
+  //     leftSafeMargin,
+  //     neededSpace: accuratePopoverRect.width + margin,
+  //     rightShiftApplied: accuratePopoverRect.width + margin - adjustedSpaceLeft,
+  //     finalLeftSpace:
+  //       adjustedSpaceLeft +
+  //       (accuratePopoverRect.width + margin - adjustedSpaceLeft),
+  //     finalX: finalPosition.x,
+  //     leftSafeDistance: finalPosition.x - leftSafeMargin,
+  //     explanation: "向右移动来增加左侧可用空间，保持左侧安全距离",
+  //   });
+  // }
+  // console.log("最终坐标:", { x: finalPosition.x, y: finalPosition.y });
 
   // 确保不超出视口边界
   let { x, y } = finalPosition;
@@ -383,52 +248,52 @@ export function calculatePopoverPosition(options: PopoverPositionOptions) {
   // 定义底部安全边距（统一使用）
   const bottomSafeMargin = 40; // 底部安全边距，确保按钮完全可见
 
-  console.log("边界检查前的坐标:", { x, y });
+  // console.log("边界检查前的坐标:", { x, y });
 
   // 水平边界检查
   if (x < leftSafeMargin) {
-    console.log("水平边界调整: 左边界超出，调整到左侧安全距离");
+    // console.log("水平边界调整: 左边界超出，调整到左侧安全距离");
     x = leftSafeMargin;
   } else if (x + accuratePopoverRect.width > viewportWidth - margin) {
-    console.log("水平边界调整: 右边界超出，调整到右边界");
+    // console.log("水平边界调整: 右边界超出，调整到右边界");
     x = viewportWidth - accuratePopoverRect.width - margin;
   }
 
   // 垂直边界检查 - 更严格的边界处理
   if (y < margin) {
-    console.log("垂直边界调整: 上边界超出，调整到 margin");
+    // console.log("垂直边界调整: 上边界超出，调整到 margin");
     y = margin;
   } else if (y + popoverRect.height > viewportHeight - margin) {
-    console.log("垂直边界调整: 下边界超出，尝试向上调整");
+    // console.log("垂直边界调整: 下边界超出，尝试向上调整");
     // 如果超出底部，尝试向上调整，为底部留出安全边距
     const newY = viewportHeight - popoverRect.height - bottomSafeMargin;
     if (newY >= margin) {
       y = newY;
-      console.log(
-        "垂直边界调整: 向上调整成功，新坐标:",
-        newY,
-        "底部安全边距:",
-        bottomSafeMargin
-      );
+      // console.log(
+      //   "垂直边界调整: 向上调整成功，新坐标:",
+      //   newY,
+      //   "底部安全边距:",
+      //   bottomSafeMargin
+      // );
     } else {
       // 如果向上调整后仍然超出顶部，则强制显示在顶部
       y = margin;
-      console.log("垂直边界调整: 向上调整后仍超出顶部，强制显示在顶部");
+      // console.log("垂直边界调整: 向上调整后仍超出顶部，强制显示在顶部");
     }
   }
 
   // 如果调整后仍然超出边界，尝试重新计算位置
   if (y + popoverRect.height > viewportHeight - margin || y < margin) {
-    console.log("边界调整后仍超出，尝试重新计算位置");
+    // console.log("边界调整后仍超出，尝试重新计算位置");
     // 强制使用 top 位置
     if (spaceTop >= popoverRect.height + margin) {
       y = targetRect.top - popoverRect.height - margin + offset.y;
       bestPosition = "top";
-      console.log("强制使用 top 位置，新坐标:", y);
+      // console.log("强制使用 top 位置，新坐标:", y);
     } else {
       // 如果顶部空间也不够，强制显示在顶部边界
       y = margin;
-      console.log("强制显示在顶部边界");
+      // console.log("强制显示在顶部边界");
     }
   }
 
@@ -436,39 +301,39 @@ export function calculatePopoverPosition(options: PopoverPositionOptions) {
   const currentBottom = y + popoverRect.height;
   const safeBottom = viewportHeight - bottomSafeMargin;
 
-  console.log("底部安全边距检查:", {
-    currentBottom,
-    safeBottom,
-    bottomSafeMargin,
-    needsAdjustment: currentBottom > safeBottom,
-    distanceToBottom: viewportHeight - currentBottom,
-  });
+  // console.log("底部安全边距检查:", {
+  //   currentBottom,
+  //   safeBottom,
+  //   bottomSafeMargin,
+  //   needsAdjustment: currentBottom > safeBottom,
+  //   distanceToBottom: viewportHeight - currentBottom,
+  // });
 
   // 修复：即使没有超出安全边界，也要确保有足够的底部空间
   if (
     currentBottom > safeBottom ||
     viewportHeight - currentBottom < bottomSafeMargin
   ) {
-    console.log("最终检查: 底部安全边距不足，向上调整");
+    // console.log("最终检查: 底部安全边距不足，向上调整");
     const finalY = viewportHeight - popoverRect.height - bottomSafeMargin;
     if (finalY >= margin) {
       y = finalY;
-      console.log(
-        "最终调整后的坐标:",
-        y,
-        "新的底部位置:",
-        y + popoverRect.height
-      );
+      // console.log(
+      //   "最终调整后的坐标:",
+      //   y,
+      //   "新的底部位置:",
+      //   y + popoverRect.height
+      // );
     } else {
       y = margin;
-      console.log("无法满足底部安全边距，强制显示在顶部");
+      // console.log("无法满足底部安全边距，强制显示在顶部");
     }
   } else {
-    console.log("底部安全边距检查通过，无需调整");
+    // console.log("底部安全边距检查通过，无需调整");
   }
 
-  console.log("边界检查后的最终坐标:", { x, y });
-  console.log("=== 定位调试结束 ===\n");
+  // console.log("边界检查后的最终坐标:", { x, y });
+  // console.log("=== 定位调试结束 ===\n");
 
   return {
     x,

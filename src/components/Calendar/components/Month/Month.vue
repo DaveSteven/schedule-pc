@@ -16,6 +16,7 @@ import interactionPlugin from "@fullcalendar/interaction";
 import { lightenColor } from "@/utils";
 import "./styles.scss";
 import { getLunarDisplayText } from "../../utils/date";
+import dayjs from "dayjs";
 
 // Props
 interface MonthProps {
@@ -70,6 +71,53 @@ const calendarOptions = computed(() => ({
   weekends: true,
   dayMaxEvents: true,
   dayPopoverFormat: { day: "numeric" },
+  
+  // 日期选择事件
+  select: function(info: any) {
+    console.log('Date selected:', info);
+    const startDate = dayjs(info.start).format('YYYY-MM-DD');
+    const endDate = dayjs(info.end).format('YYYY-MM-DD');
+    
+    // 发射事件创建事件
+    emit("eventChange", {
+      id: '',
+      title: '',
+      start: startDate,
+      end: endDate,
+      allDay: info.allDay,
+      color: '#409EFF',
+      isNew: true
+    });
+  },
+  
+  // 日期点击事件
+  dateClick: function(info: any) {
+    console.log('Date clicked:', info);
+    const clickedDate = dayjs(info.date).format('YYYY-MM-DD');
+    
+    // 发射日期变更事件
+    emit("dateChange", clickedDate);
+    
+    // 如果点击的是空白区域，创建新事件
+    if (!info.dayEl.classList.contains('fc-daygrid-day-events')) {
+      emit("eventChange", {
+        id: '',
+        title: '',
+        start: clickedDate,
+        end: clickedDate,
+        allDay: true,
+        color: '#409EFF',
+        isNew: true
+      });
+    }
+  },
+  
+  // 事件点击
+  eventClick: function(info: any) {
+    console.log('Event clicked:', info.event);
+    emit("eventClick", info.event);
+  },
+  
   moreLinkClick: function (args: any) {
     console.log("moreLinkClick", args.allSegs);
   },
@@ -111,20 +159,6 @@ const calendarOptions = computed(() => ({
         </div>
       `,
     };
-  },
-  select: function (arg: any) {
-    // 处理日期选择
-    emit("dateChange", arg.startStr);
-  },
-  eventClick: function (info: any) {
-    // 处理事件点击
-    const { event, el } = info;
-    const { _def } = event;
-    const { extendedProps = {} } = _def;
-    emit("eventClick", {
-      event: { ...event, ...extendedProps },
-      el,
-    });
   },
   eventDrop: function (info: any) {
     const { event, el } = info;

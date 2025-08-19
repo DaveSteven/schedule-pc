@@ -1,10 +1,13 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, onMounted, onUnmounted, computed, watch, nextTick } from "vue";
 import type { TimeEvent, DayProps, DayEmits } from "./types";
 import { useTimeUtils } from "../../hooks/useTimeUtils";
 import { useCurrentTime } from "../../hooks/useCurrentTime";
 import { useDragHandlers } from "../../hooks/useDragHandlers";
 import { useEventHandlers } from "../../hooks/useEventHandlers";
+import EventForm from "@/components/EventForm/EventForm.vue";
+import EventPopover from "@/components/EventPopover/EventPopover.vue";
+import dayjs from "dayjs";
 
 // Props
 const props = withDefaults(defineProps<DayProps>(), {
@@ -20,6 +23,11 @@ const timelineContainer = ref<HTMLElement | null>(null);
 const newEventElement = ref<HTMLElement | null>(null);
 const activeEventId = ref<string | null>(null);
 const activeAllDayEventId = ref<string | null>(null);
+
+// 表单相关状态
+const showForm = ref(false);
+const eventFormData = ref<any>(null);
+const formTargetElement = ref<HTMLElement | null>(null);
 
 // 使用hooks
 const { formatTime, timeLabels } = useTimeUtils();
@@ -37,6 +45,145 @@ const {
   handleTimelineClick,
   toggleAllDayEvents,
 } = useEventHandlers(props, emit, newEventElement);
+
+// 处理表单时间变化
+const handleFormTimeChanged = (timeData: { start: string; end: string }) => {
+  if (timeBlock.value) {
+    const startMinutes = dayjs(timeData.start).diff(
+      dayjs(props.selectedDate).startOf("day"),
+      "minute"
+    );
+    const endMinutes = dayjs(timeData.end).diff(
+      dayjs(props.selectedDate).startOf("day"),
+      "minute"
+    );
+
+    // 直接更新时间块
+    timeBlock.value.startTime = startMinutes;
+    timeBlock.value.duration = endMinutes - startMinutes;
+    timeBlock.value.top = startMinutes;
+    timeBlock.value.height = endMinutes - startMinutes;
+  }
+};
+
+// 处理表单提交
+const handleFormSubmit = (eventData: any) => {
+  // 发射事件创建事件
+  emit("event-change", {
+    event: eventData,
+    el: newEventElement.value as HTMLElement,
+  });
+
+  // 清空时间块和表单
+  timeBlock.value = null;
+  showForm.value = false;
+  eventFormData.value = null;
+  formTargetElement.value = null;
+};
+
+// 处理表单取消
+const handleFormCancel = () => {
+  // 清空时间块和表单
+  timeBlock.value = null;
+  showForm.value = false;
+  eventFormData.value = null;
+  formTargetElement.value = null;
+};
+
+// 监听时间块变化，自动显示表单
+const watchTimeBlock = () => {
+  if (timeBlock.value) {
+    console.log("Day: 时间块变化，准备显示表单:", timeBlock.value);
+
+    // 初始化表单数据
+    const startDateTime = dayjs(props.selectedDate)
+      .startOf("day")
+      .add(timeBlock.value.startTime, "minute");
+    const endDateTime = dayjs(props.selectedDate)
+      .startOf("day")
+      .add(timeBlock.value.startTime + timeBlock.value.duration, "minute");
+
+    eventFormData.value = {
+      title: "",
+      start: startDateTime.format(), // 使用 format() 而不是 toISOString()
+      end: endDateTime.format(), // 使用 format() 而不是 toISOString()
+      allDay: false,
+      color: "#409EFF",
+    };
+
+    // 等待 DOM 更新后再设置目标元素
+    nextTick(() => {
+      if (newEventElement.value) {
+        console.log("Day: 设置表单目标元素:", newEventElement.value);
+        formTargetElement.value = newEventElement.value;
+        showForm.value = true;
+      } else {
+        console.warn("Day: 未找到时间块元素引用");
+      }
+    });
+  } else {
+    // 时间块被清空时，确保表单也被清空
+    console.log("Day: 时间块被清空，隐藏表单");
+    showForm.value = false;
+    eventFormData.value = null;
+    formTargetElement.value = null;
+  }
+};
+
+// 监听 timeBlock 变化
+watch(() => timeBlock.value, watchTimeBlock, { immediate: true });
+
+// 监听拖动状态变化，控制表单显示
+const watchDragState = () => {
+  // 当开始拖动时，隐藏表单
+  if (dragState.value.isDragging || dragState.value.isResizing) {
+    console.log("开始拖动，隐藏表单");
+    showForm.value = false;
+  }
+
+  // 当拖动结束时，重新显示表单并更新目标元素
+  if (
+    !dragState.value.isDragging &&
+    !dragState.value.isResizing &&
+    timeBlock.value
+  ) {
+    console.log("拖动结束，重新显示表单");
+
+    // 更新表单数据以反映拖动后的时间
+    const startDateTime = dayjs(props.selectedDate)
+      .startOf("day")
+      .add(timeBlock.value.startTime, "minute");
+    const endDateTime = dayjs(props.selectedDate)
+      .startOf("day")
+      .add(timeBlock.value.startTime + timeBlock.value.duration, "minute");
+
+    eventFormData.value = {
+      title: "",
+      start: startDateTime.format(), // 使用 format() 而不是 toISOString()
+      end: endDateTime.format(), // 使用 format() 而不是 toISOString()
+      allDay: false,
+      color: "#409EFF",
+    };
+
+    // 等待 DOM 更新后再设置目标元素
+    nextTick(() => {
+      if (newEventElement.value) {
+        console.log("拖动结束后更新表单目标元素:", newEventElement.value);
+        formTargetElement.value = newEventElement.value;
+        showForm.value = true;
+      } else {
+        console.warn("拖动结束后未找到时间块元素引用");
+      }
+    });
+  }
+};
+
+// 监听拖动状态变化
+watch(
+  () => [dragState.value.isDragging, dragState.value.isResizing],
+  watchDragState,
+  { immediate: true }
+);
 
 // 本地全天事件点击处理函数
 const handleAllDayEventClick = (event: any, e: MouseEvent, dragState: any) => {
@@ -349,6 +496,21 @@ onMounted(() => {
       </div>
     </div>
   </div>
+
+  <!-- 事件表单 -->
+  <EventPopover
+    :visible="showForm"
+    :target-element="formTargetElement"
+    :width="440"
+    @close="handleFormCancel"
+  >
+    <EventForm
+      :data="eventFormData"
+      @time-changed="handleFormTimeChanged"
+      @submit="handleFormSubmit"
+      @cancel="handleFormCancel"
+    />
+  </EventPopover>
 </template>
 
 <style scoped lang="scss">

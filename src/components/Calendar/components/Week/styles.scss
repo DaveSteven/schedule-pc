@@ -237,6 +237,14 @@
   }
 
   &__time-column {
+    &-container {
+      position: relative;
+      display: flex;
+      flex: 1;
+      // 确保时间块可以相对于此容器定位
+      overflow: visible;
+    }
+
     flex: 1;
     position: relative;
     border-right: 1px solid #e2e8f0;
@@ -345,8 +353,7 @@
     transition: box-shadow 0.2s ease;
     border-radius: 8px;
     position: absolute;
-    left: 0;
-    right: 0;
+    // 移除 left: 0 和 right: 0，因为现在使用具体的 left 和 width 值
     background-color: #e9d8ff;
     border: 1px solid var(--primary-color, #9f58ff);
     cursor: move;

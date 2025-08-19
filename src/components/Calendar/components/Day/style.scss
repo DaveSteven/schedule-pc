@@ -255,7 +255,7 @@
   }
 
   &__time-block {
-    z-index: 20;
+    z-index: 20000; // 确保在遮罩层之上
     transition: box-shadow 0.2s ease;
     border-radius: 8px;
     position: absolute;
@@ -266,6 +266,7 @@
     cursor: move;
     user-select: none;
     border-left: 4px solid var(--primary-color, #9f58ff);
+    pointer-events: auto; // 确保可以接收鼠标事件
 
     &:hover {
       // 顶部边缘区域提示

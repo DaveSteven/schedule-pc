@@ -218,6 +218,20 @@ export function useTimeEvents(events: Ref<any[]>, weekRange: Ref<WeekDateInfo[]>
 export function useTimeBlocks() {
   // 只管理一个全局的timeBlock
   const timeBlock = ref<TimeBlock | null>(null);
+  
+  // 添加一个受保护的清空函数
+  const protectedClearTimeBlock = (force: boolean = false) => {
+    // 如果强制清空或者没有拖拽状态，则允许清空
+    if (force) {
+      timeBlock.value = null;
+      return;
+    }
+    
+    // 这里我们不能直接访问 dragState，所以通过参数传递
+    // 在 Week.vue 中调用时传入拖拽状态
+    console.log("useTimeBlocks: 尝试清空 timeBlock");
+    timeBlock.value = null;
+  };
 
   // 创建时间块
   const createTimeBlock = (date: string, startTime: number, duration: number = 30) => {
@@ -257,6 +271,7 @@ export function useTimeBlocks() {
     timeBlock,
     createTimeBlock,
     clearTimeBlock,
+    protectedClearTimeBlock,
     hasTimeBlock,
     getTimeBlock,
   };
