@@ -15,6 +15,7 @@ import { useEventHandlers } from "../../hooks/useEventHandlers";
 import EventForm from "@/components/EventForm/EventForm.vue";
 import EventPopover from "@/components/EventPopover/EventPopover.vue";
 import dayjs from "dayjs";
+import { ElScrollbar } from "element-plus";
 
 // Props
 const props = withDefaults(defineProps<DayProps>(), {
@@ -27,6 +28,7 @@ const emit = defineEmits<CalendarEmits>();
 
 // 响应式数据
 const timelineContainer = ref<HTMLElement | null>(null);
+const scrollbarRef = ref<any>(null);
 const newEventElement = ref<HTMLElement | null>(null);
 const activeEventId = ref<string | null>(null);
 const activeAllDayEventId = ref<string | null>(null);
@@ -65,9 +67,13 @@ watch(
 
 // 计算timeBlock的fixed位置
 const getTimeBlockFixedPosition = () => {
-  if (!timelineContainer.value || !timeBlock.value) return null;
+  if (!scrollbarRef.value || !timeBlock.value) return null;
 
-  const contentElement = timelineContainer.value.querySelector(
+  // 使用 ElScrollbar 的 wrapRef 获取滚动容器
+  const scrollbarWrap = scrollbarRef.value.wrapRef as HTMLElement;
+  if (!scrollbarWrap) return null;
+
+  const contentElement = scrollbarWrap.querySelector(
     ".day-timeline__content"
   ) as HTMLElement;
   if (!contentElement) return null;
@@ -107,7 +113,7 @@ const updateFixedPosition = () => {
 
 // 使用ResizeObserver监听容器大小变化，替代滚动事件
 const setupResizeObserver = () => {
-  if (!timelineContainer.value) return;
+  if (!scrollbarRef.value) return;
 
   const resizeObserver = new ResizeObserver(() => {
     if (timeBlock.value) {
@@ -115,7 +121,11 @@ const setupResizeObserver = () => {
     }
   });
 
-  resizeObserver.observe(timelineContainer.value);
+  // 监听 ElScrollbar 的滚动容器
+  const scrollbarWrap = scrollbarRef.value.wrapRef as HTMLElement;
+  if (scrollbarWrap) {
+    resizeObserver.observe(scrollbarWrap);
+  }
 
   // 在组件卸载时清理
   onUnmounted(() => {
@@ -391,6 +401,13 @@ const handleTimelineClickWrapper = (event: MouseEvent) => {
   );
 };
 
+// 处理 ElScrollbar 滚动事件
+const handleScrollbarScroll = ({ scrollTop }: { scrollTop: number }) => {
+  // 可以在这里添加滚动相关的逻辑
+  // 例如：更新滚动位置状态、触发其他滚动相关的操作等
+  console.log("Scrollbar scrolled to:", scrollTop);
+};
+
 const handleTimeBlockMouseDown = (event: MouseEvent) => {
   if (!timeBlock.value) return;
 
@@ -426,7 +443,19 @@ onMounted(() => {
     setTimeout(() => {
       // 当有事件被选中时，禁止滚动到当前时间
       const allowScroll = !activeEventId.value;
-      scrollToCurrentTime(timelineContainer.value, allowScroll);
+      // 使用 ElScrollbar 的 scrollTo 方法实现平滑滚动
+      if (scrollbarRef.value && allowScroll) {
+        const containerHeight = scrollbarRef.value.wrapRef?.clientHeight || 0;
+        const scrollTop = currentTimeTop.value - containerHeight / 2;
+        const targetScrollTop = Math.max(0, scrollTop);
+
+        // 使用 scrollTo 方法，传入对象参数实现平滑滚动
+        // 参数：{ top: 垂直位置, behavior: 'smooth' 表示平滑滚动 }
+        scrollbarRef.value.scrollTo({
+          top: targetScrollTop,
+          behavior: "smooth",
+        });
+      }
     }, 500);
   }
 
@@ -540,85 +569,86 @@ onMounted(() => {
   <!-- 时间轴组件 -->
   <div
     class="day-timeline"
-    ref="timelineContainer"
     :class="{
       'day-timeline--scroll-disabled': activeEventId || activeAllDayEventId,
     }"
   >
-    <div
-      class="day-timeline__content"
-      @click="handleTimelineClickWrapper"
-      @mousedown.stop
-    >
-      <!-- 时间标签 -->
-      <div class="day-timeline__labels">
-        <div
-          v-for="label in timeLabels"
-          :key="label.time"
-          class="day-timeline__label"
-          :style="{ top: `${label.top - 1}px` }"
-        >
-          {{ label.time }}
-        </div>
-      </div>
-
-      <!-- 当前时间线 -->
+    <ElScrollbar ref="scrollbarRef">
       <div
-        v-if="shouldShowCurrentTime"
-        class="day-timeline__current-line"
-        :style="{ top: `${currentTimeTop}px` }"
-      />
-
-      <!-- 时间事件 -->
-      <div
-        v-for="event in processedTimeEvents"
-        :key="event.id"
-        class="day-timeline__event"
-        :class="{
-          'day-timeline__event--dragging':
-            dragState.isEventDragging &&
-            dragState.currentEvent?.id === event.id,
-          'day-timeline__event--active': activeEventId === event.id,
-        }"
-        :style="{
-          top:
-            dragState.isEventDragging &&
-            dragState.currentEvent?.id === event.id &&
-            dragState.dragEventPosition
-              ? `${dragState.dragEventPosition.top}px`
-              : `${event.top}px`,
-          height: `${event.height}px`,
-          backgroundColor: lightenColor(event.color, 0.8),
-          borderLeft: `3px solid ${event.color}`,
-          left: `calc(60px + ${event.overlapStyle?.left || '0%'})`,
-          width: `calc(${event.overlapStyle?.width || '100%'} - 69px)`,
-          zIndex: event.overlapStyle?.zIndex || 1,
-        }"
-        @mousedown="(e) => handleEventDragStart(e, event)"
-        @click.stop="handleEventClick(event, $event)"
+        class="day-timeline__content"
+        @click="handleTimelineClickWrapper"
+        @mousedown.stop
       >
-        <div class="day-timeline__event-content">
-          <span class="day-timeline__event-text"
-            >{{ event.title }}，{{ formatTime(event.startTime) }} -
-            {{ formatTime(event.startTime + event.duration) }}</span
+        <!-- 时间标签 -->
+        <div class="day-timeline__labels">
+          <div
+            v-for="label in timeLabels"
+            :key="label.time"
+            class="day-timeline__label"
+            :style="{ top: `${label.top - 1}px` }"
           >
+            {{ label.time }}
+          </div>
         </div>
-      </div>
 
-      <!-- 时间块 -->
-      <div
-        v-if="timeBlock"
-        ref="newEventElement"
-        class="day-timeline__time-block day-timeline__time-block--fixed"
-        :style="getFixedStyles()"
-        @mousedown.stop="(e) => handleTimeBlockMouseDown(e)"
-      >
-        <div class="day-timeline__time-display">
-          {{ formatTime(timeBlock.startTime) }} -
-          {{ formatTime(timeBlock.startTime + timeBlock.duration) }}
+        <!-- 当前时间线 -->
+        <div
+          v-if="shouldShowCurrentTime"
+          class="day-timeline__current-line"
+          :style="{ top: `${currentTimeTop}px` }"
+        />
+
+        <!-- 时间事件 -->
+        <div
+          v-for="event in processedTimeEvents"
+          :key="event.id"
+          class="day-timeline__event"
+          :class="{
+            'day-timeline__event--dragging':
+              dragState.isEventDragging &&
+              dragState.currentEvent?.id === event.id,
+            'day-timeline__event--active': activeEventId === event.id,
+          }"
+          :style="{
+            top:
+              dragState.isEventDragging &&
+              dragState.currentEvent?.id === event.id &&
+              dragState.dragEventPosition
+                ? `${dragState.dragEventPosition.top}px`
+                : `${event.top}px`,
+            height: `${event.height}px`,
+            backgroundColor: lightenColor(event.color, 0.8),
+            borderLeft: `3px solid ${event.color}`,
+            left: `calc(60px + ${event.overlapStyle?.left || '0%'})`,
+            width: `calc(${event.overlapStyle?.width || '100%'} - 69px)`,
+            zIndex: event.overlapStyle?.zIndex || 1,
+          }"
+          @mousedown="(e) => handleEventDragStart(e, event)"
+          @click.stop="handleEventClick(event, $event)"
+        >
+          <div class="day-timeline__event-content">
+            <span class="day-timeline__event-text"
+              >{{ event.title }}，{{ formatTime(event.startTime) }} -
+              {{ formatTime(event.startTime + event.duration) }}</span
+            >
+          </div>
+        </div>
+
+        <!-- 时间块 -->
+        <div
+          v-if="timeBlock"
+          ref="newEventElement"
+          class="day-timeline__time-block day-timeline__time-block--fixed"
+          :style="getFixedStyles()"
+          @mousedown.stop="(e) => handleTimeBlockMouseDown(e)"
+        >
+          <div class="day-timeline__time-display">
+            {{ formatTime(timeBlock.startTime) }} -
+            {{ formatTime(timeBlock.startTime + timeBlock.duration) }}
+          </div>
         </div>
       </div>
-    </div>
+    </ElScrollbar>
   </div>
 
   <!-- 事件表单 -->

@@ -10,7 +10,7 @@
           position: 'fixed',
           left: `${position.x}px`,
           top: `${position.y}px`,
-          zIndex: 10000,
+          zIndex: computedZIndex,
           width: computedWidth,
         }"
         @click.stop
@@ -30,6 +30,10 @@
       <div
         v-if="visible"
         class="event-popover__mask"
+        :style="{
+          zIndex:
+            props.zIndex !== undefined ? props.zIndex - 1 : currentMaskZIndex,
+        }"
         @click="handleMaskClick"
         @mousedown.prevent
         @touchstart.prevent
@@ -41,6 +45,7 @@
 <script setup lang="ts">
 import { ref, nextTick, watch, onMounted, onUnmounted, computed } from "vue";
 import { calculatePopoverPosition } from "./utils";
+import { usePopoverZIndex } from "./composables/usePopoverZIndex";
 import type { Props, Emits } from "./types";
 
 /**
@@ -54,6 +59,7 @@ import type { Props, Emits } from "./types";
  *   :width="'600px'"       // 字符串：600px
  *   :width="'50vw'"        // 视口宽度：50vw
  *   :width="'80%'"         // 百分比：80%
+ *   :z-index="10050"       // 可选：自定义 z-index
  * />
  */
 
@@ -66,6 +72,18 @@ const popoverRef = ref<HTMLElement>();
 const position = ref({ x: 0, y: 0 });
 const currentPosition = ref<string>("bottom-left");
 
+// 使用 z-index 管理
+const { getNextZIndex, getMaskZIndex, releaseZIndex } = usePopoverZIndex();
+
+// 当前 popover 的 z-index
+const currentZIndex = ref<number>(0);
+
+// 当前 mask 的 z-index
+const currentMaskZIndex = ref<number>(0);
+
+// 用于调试的实例标识
+const instanceId = Math.random().toString(36).substr(2, 9);
+
 // 计算宽度值
 const computedWidth = computed(() => {
   if (!props.width) return undefined;
@@ -75,6 +93,17 @@ const computedWidth = computed(() => {
   }
 
   return props.width;
+});
+
+// 计算最终的 z-index
+const computedZIndex = computed(() => {
+  // 如果外部传入了 zIndex，优先使用
+  if (props.zIndex !== undefined) {
+    return props.zIndex;
+  }
+
+  // 否则使用动态分配的 z-index
+  return currentZIndex.value;
 });
 
 // 计算Popover位置
@@ -100,11 +129,31 @@ const updatePosition = async () => {
 // 监听visible变化
 watch(
   () => props.visible,
-  (newVisible) => {
-    if (newVisible) {
+  (newVisible, oldVisible) => {
+    if (newVisible && !oldVisible) {
+      // 当 popover 从隐藏变为显示时，分配新的 z-index
+      if (props.zIndex === undefined) {
+        const newZIndex = getNextZIndex();
+        const newMaskZIndex = getMaskZIndex(newZIndex);
+        currentZIndex.value = newZIndex;
+        currentMaskZIndex.value = newMaskZIndex;
+        console.log(
+          `[Instance ${instanceId}] EventPopover: 分配 Popover z-index ${newZIndex}, Mask z-index ${newMaskZIndex}`
+        );
+      }
       nextTick(() => {
         updatePosition();
       });
+    } else if (!newVisible && oldVisible) {
+      // 当 popover 从显示变为隐藏时，释放 z-index
+      if (props.zIndex === undefined) {
+        console.log(
+          `[Instance ${instanceId}] EventPopover: 释放 z-index ${currentZIndex.value}`
+        );
+        releaseZIndex();
+        currentZIndex.value = 0; // 重置当前值
+        currentMaskZIndex.value = 0; // 重置 mask 值
+      }
     }
   }
 );
@@ -165,6 +214,10 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener("resize", handleResize);
+  // 组件卸载时释放 z-index
+  if (props.zIndex === undefined) {
+    releaseZIndex();
+  }
 });
 </script>
 

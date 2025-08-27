@@ -147,60 +147,51 @@
       :visible="moreEvents"
       :target-element="moreElement"
       :width="300"
+      @close="handleMoreEventsClose"
     >
       <div class="more-events-popover">
         <div class="more-events-popover__header">
-          <h3 class="more-events-popover__title">
-            {{ expandedDateTitle }} 的所有日程
-          </h3>
-          <button
-            class="more-events-popover__close-btn"
-            @click="closeMoreEvents"
-          >
-            ×
-          </button>
+          <p class="more-events-popover__title">
+            周{{ weekDays[dayjs(expandedDate).day()] }}
+          </p>
+          <p class="text-24px color-#262626">
+            {{ dayjs(expandedDate).format("DD") }}
+          </p>
         </div>
-        <div class="more-events-popover__content">
-          <div
-            v-if="
-              expandedDate &&
-              getAllEventsForDate(expandedDate).allEvents.length === 0
-            "
-            class="more-events-popover__empty"
-          >
-            该日期暂无日程
-          </div>
-          <div
-            v-else-if="expandedDate"
-            class="more-events-popover__events-list"
-          >
+        <ElScrollbar height="200px">
+          <div class="more-events-popover__content">
             <div
-              v-for="event in getAllEventsForDate(expandedDate).allEvents"
-              :key="event.id || `event-${event.title}`"
-              class="more-events-popover__event-item"
-              @click="handleEventClick(event, $event)"
-              :style="
-                event.allDay
-                  ? {
-                      backgroundColor: lightenColor(event.color),
-                      borderColor: event.color,
-                    }
-                  : {}
+              v-if="
+                expandedDate &&
+                getAllEventsForDate(expandedDate).allEvents.length === 0
               "
+              class="more-events-popover__empty"
             >
-              <div class="more-events-popover__event-content">
-                <div
-                  v-if="!event.allDay"
-                  class="more-events-popover__event-color-block"
-                  :style="{ backgroundColor: event.color }"
-                ></div>
-                <span>{{ getEventTimeDisplay(event) }}</span>
-                <!-- 非全天事件才显示标题，因为全天事件的时间显示已经包含标题 -->
-                <span v-if="!event.allDay">{{ event.title }}</span>
+              该日期暂无日程
+            </div>
+            <div
+              v-else-if="expandedDate"
+              class="more-events-popover__events-list"
+            >
+              <div
+                v-for="event in getAllEventsForDate(expandedDate).allEvents"
+                :key="event.id || `event-${event.title}`"
+                class="more-events-popover__event-item"
+                @click="handleEventClick(event, $event, false)"
+                :style="{
+                  backgroundColor: lightenColor(event.color),
+                  borderColor: event.color,
+                }"
+              >
+                <div class="more-events-popover__event-content">
+                  <span>{{ getEventTimeDisplay(event) }}</span>
+                  <!-- 非全天事件才显示标题，因为全天事件的时间显示已经包含标题 -->
+                  <span v-if="!event.allDay">{{ event.title }}</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        </ElScrollbar>
       </div>
     </EventPopover>
   </div>
@@ -218,6 +209,7 @@ import { EventType } from "../../types/events";
 import { createEventFromExisting } from "../../utils/eventFactory";
 import EventPopover from "@/components/EventPopover/EventPopover.vue";
 import EventForm from "@/components/EventForm/EventForm.vue";
+import { ElScrollbar } from "element-plus";
 
 // Props
 const props = withDefaults(defineProps<MonthProps>(), {
@@ -394,6 +386,7 @@ const getCrossDayEventsForDate = (date: string) => {
     "临时事件数量:",
     localEvents.value.filter((e) => e.id && e.id.startsWith("temp_")).length
   );
+  console.log(localEvents.value);
 
   const crossDayEvents = localEvents.value
     .filter((event) => {
@@ -403,6 +396,7 @@ const getCrossDayEventsForDate = (date: string) => {
         return false;
       }
 
+      // 使用已经转换好的 isMultiDay 字段
       if (!event.isMultiDay) return false;
 
       const eventStart = dayjs(event.start);
@@ -655,7 +649,7 @@ const handleDateClick = (date: string) => {
   // 创建新的事件对象（没有id，表示是临时事件）
   const tempId = `temp_${Date.now()}_${Math.random()
     .toString(36)
-    .substr(2, 9)}`;
+    .substring(2, 9)}`;
   const newEvent: EventItem = {
     id: tempId, // 生成临时ID
     title: "添加主题",
@@ -789,9 +783,17 @@ const handleFormTimeChanged = (timeData: any) => {
 };
 
 // 处理事件点击
-const handleEventClick = (event: EventItem, e: MouseEvent) => {
+const handleEventClick = (
+  event: EventItem,
+  e: MouseEvent,
+  setActive: boolean = true
+) => {
   const targetElement = e.currentTarget as HTMLElement;
-  activeEventId.value = event.id || null;
+
+  // 只有在需要设置activeEventId时才设置
+  if (setActive) {
+    activeEventId.value = event.id || null;
+  }
 
   // 将EventItem转换为BaseEventData格式，缺失字段设为undefined
   const baseEvent = createEventFromExisting(event);
@@ -811,7 +813,15 @@ const handleMoreEventsClick = (date: string, e: MouseEvent) => {
 // 新增：获取指定日期的所有事件（用于更多事件弹窗）
 const getAllEventsForDate = (date: string) => {
   const tempEvents = getTempEventsForDate(date);
-  const crossDayEvents = getCrossDayEventsForDate(date);
+  // 获取所有跨天事件，不限制只在第一天显示
+  const crossDayEvents = localEvents.value.filter((event) => {
+    // 排除临时事件（以temp_开头的ID）
+    if (event.id && event.id.startsWith("temp_")) {
+      return false;
+    }
+    // 使用已经转换好的 isMultiDay 字段
+    return event.isMultiDay;
+  });
   const singleDayEvents = getSingleDayEventsForDate(date);
 
   // 分离全天日程和其他日程
@@ -837,13 +847,6 @@ const getAllEventsForDate = (date: string) => {
     nonAllDayEvents,
     allEvents: sortedEvents,
   };
-};
-
-// 新增：关闭更多事件弹窗
-const closeMoreEvents = () => {
-  moreEvents.value = false;
-  expandedDate.value = null;
-  moreElement.value = null;
 };
 
 // 新增：获取临时事件
@@ -949,12 +952,6 @@ const getTempEventStyle = (date: string) => {
   return style;
 };
 
-// 计算属性：更多事件弹窗标题
-const expandedDateTitle = computed(() => {
-  if (!expandedDate.value) return "";
-  return dayjs(expandedDate.value).format("M月D日");
-});
-
 // 新增：获取事件时间显示
 const getEventTimeDisplay = (event: EventItem) => {
   if (event.allDay) {
@@ -976,6 +973,12 @@ const getEventTimeDisplay = (event: EventItem) => {
   return `${dayjs(event.start).format("HH:mm")} - ${dayjs(event.end).format(
     "HH:mm"
   )}`;
+};
+
+const handleMoreEventsClose = () => {
+  moreEvents.value = false;
+  expandedDate.value = null;
+  moreElement.value = null;
 };
 
 // 生命周期
@@ -1149,7 +1152,6 @@ onMounted(() => {
   &__events-container {
     position: relative;
     height: calc(100% - 62px);
-    overflow: hidden; // 防止事件溢出
   }
 
   // 事件样式
@@ -1258,44 +1260,18 @@ onMounted(() => {
   overflow: hidden;
 
   &__header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 12px 16px;
-    border-bottom: 1px solid #e8e8e8;
+    padding: 10px 5px 0;
   }
 
   &__title {
     margin: 0;
-    font-size: 16px;
-    font-weight: 600;
-    color: #333;
-  }
-
-  &__close-btn {
-    background-color: #f0f0f0;
-    border: none;
-    border-radius: 50%;
-    width: 24px;
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 18px;
-    color: #888;
-    cursor: pointer;
-    transition: background-color 0.2s ease;
-
-    &:hover {
-      background-color: #e0e0e0;
-      color: #555;
-    }
+    font-size: 14px;
+    color: #262626;
   }
 
   &__content {
     flex: 1;
-    padding: 16px;
-    overflow-y: auto;
+    padding: 5px;
   }
 
   &__empty {
@@ -1312,10 +1288,10 @@ onMounted(() => {
   }
 
   &__event-item {
-    padding: 4px;
-    border-radius: 4px;
     cursor: pointer;
     transition: background-color 0.2s ease;
+    border-radius: 4px;
+    padding: 4px;
     border-left: 3px solid transparent;
   }
 
@@ -1343,7 +1319,6 @@ onMounted(() => {
     width: 6px;
     height: 6px;
     border-radius: 2px;
-    margin-left: 8px;
     flex-shrink: 0;
   }
 }

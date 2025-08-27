@@ -5,7 +5,6 @@
   display: flex;
   align-items: flex-start;
   gap: 1px;
-  min-height: 80px;
   box-sizing: border-box;
   box-shadow: 0px 2px 4px 0px rgba(0, 0, 0, 0.16);
   z-index: 1;
@@ -167,19 +166,9 @@
 .day-timeline {
   position: relative;
   flex: 1;
-  height: 100%;
-  overflow-y: auto;
   background: #fff;
-  scroll-behavior: smooth;
-
-  /* 隐藏滚动条 */
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-
-  &::-webkit-scrollbar {
-    display: none;
-  }
-
+  overflow: hidden;
+  
   /* 禁用滚动状态 */
   &--scroll-disabled {
     overflow: hidden !important;

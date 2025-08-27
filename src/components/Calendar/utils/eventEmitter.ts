@@ -31,6 +31,11 @@ export function createEventEmitter(emit: EmitFunction) {
       const data: EventChangeData = { event, el };
       emit(EventType.EVENT_CHANGE, data);
     },
+
+    // 更多事件关闭事件
+    emitMoreClose: () => {
+      emit(EventType.MORE_CLOSE);
+    },
   };
 }
 

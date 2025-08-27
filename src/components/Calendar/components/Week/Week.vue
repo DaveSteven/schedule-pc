@@ -20,7 +20,7 @@ import {
 } from "../../utils/eventFactory";
 import EventForm from "@/components/EventForm/EventForm.vue";
 import EventPopover from "@/components/EventPopover/EventPopover.vue";
-import { ElIcon } from "element-plus";
+import { ElIcon, ElScrollbar } from "element-plus";
 import { CaretBottom } from "@element-plus/icons-vue";
 
 // Props
@@ -1764,7 +1764,7 @@ onMounted(() => {
     </div>
 
     <!-- 时间轴区域 -->
-    <div class="week-view__timeline-section-container">
+    <ElScrollbar class="week-view__timeline-section-container">
       <div class="week-view__timeline-section">
         <div class="week-view__time-labels">
           <div
@@ -1873,7 +1873,7 @@ onMounted(() => {
           </div>
         </div>
       </div>
-    </div>
+    </ElScrollbar>
 
     <!-- 事件表单 -->
     <EventPopover

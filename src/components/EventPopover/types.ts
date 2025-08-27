@@ -46,6 +46,7 @@ export interface Props {
   title?: string;
   width?: string | number; // 动态设置宽度，支持字符串（如 '300px'）或数字（如 300）
   pointerEvents?: "none" | "auto" | "all";
+  zIndex?: number; // 动态设置 z-index，如果不传则使用默认值
 }
 
 export interface Emits {

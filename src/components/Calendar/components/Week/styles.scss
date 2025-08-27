@@ -206,7 +206,19 @@
   // 时间轴区域样式
   &__timeline-section-container {
     flex: 1;
-    overflow-y: auto;
+    
+    // ElScrollbar 会自动处理滚动，所以移除 overflow-y: auto
+    // 但保持高度以确保滚动条正常工作
+    height: 100%;
+    
+    // 自定义滚动条样式
+    :deep(.el-scrollbar__wrap) {
+      overflow-x: hidden;
+    }
+    
+    :deep(.el-scrollbar__bar) {
+      z-index: 1001;
+    }
   }
 
   &__timeline-section {
