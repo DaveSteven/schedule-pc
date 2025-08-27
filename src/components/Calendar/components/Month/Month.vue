@@ -178,26 +178,25 @@
               v-for="event in getAllEventsForDate(expandedDate).allEvents"
               :key="event.id || `event-${event.title}`"
               class="more-events-popover__event-item"
-              :class="{
-                'more-events-popover__event-item--temp':
-                  event.id && event.id.startsWith('temp_'),
-                'more-events-popover__event-item--cross-day': event.isMultiDay,
-                'more-events-popover__event-item--single-day':
-                  !event.isMultiDay,
-              }"
               @click="handleEventClick(event, $event)"
+              :style="
+                event.allDay
+                  ? {
+                      backgroundColor: lightenColor(event.color),
+                      borderColor: event.color,
+                    }
+                  : {}
+              "
             >
-              <div
-                class="more-events-popover__event-color"
-                :style="{ backgroundColor: event.color }"
-              ></div>
               <div class="more-events-popover__event-content">
-                <div class="more-events-popover__event-title">
-                  {{ event.title }}
-                </div>
-                <div class="more-events-popover__event-time">
-                  {{ getEventTimeDisplay(event) }}
-                </div>
+                <div
+                  v-if="!event.allDay"
+                  class="more-events-popover__event-color-block"
+                  :style="{ backgroundColor: event.color }"
+                ></div>
+                <span>{{ getEventTimeDisplay(event) }}</span>
+                <!-- 非全天事件才显示标题，因为全天事件的时间显示已经包含标题 -->
+                <span v-if="!event.allDay">{{ event.title }}</span>
               </div>
             </div>
           </div>
@@ -815,11 +814,28 @@ const getAllEventsForDate = (date: string) => {
   const crossDayEvents = getCrossDayEventsForDate(date);
   const singleDayEvents = getSingleDayEventsForDate(date);
 
+  // 分离全天日程和其他日程
+  const allDayEvents = [
+    ...tempEvents,
+    ...crossDayEvents,
+    ...singleDayEvents,
+  ].filter((event) => event.allDay);
+  const nonAllDayEvents = [
+    ...tempEvents,
+    ...crossDayEvents,
+    ...singleDayEvents,
+  ].filter((event) => !event.allDay);
+
+  // 全天日程置顶，其他日程按原有顺序
+  const sortedEvents = [...allDayEvents, ...nonAllDayEvents];
+
   return {
     tempEvents,
     crossDayEvents,
     singleDayEvents,
-    allEvents: [...tempEvents, ...crossDayEvents, ...singleDayEvents],
+    allDayEvents,
+    nonAllDayEvents,
+    allEvents: sortedEvents,
   };
 };
 
@@ -942,7 +958,20 @@ const expandedDateTitle = computed(() => {
 // 新增：获取事件时间显示
 const getEventTimeDisplay = (event: EventItem) => {
   if (event.allDay) {
-    return "全天";
+    // 计算总天数和当前是第几天
+    const startDate = dayjs(event.start);
+    const endDate = dayjs(event.end);
+    const totalDays = endDate.diff(startDate, "day") + 1;
+
+    // 获取当前展开的日期
+    const currentDate = expandedDate.value ? dayjs(expandedDate.value) : null;
+    let currentDay = 1;
+
+    if (currentDate && startDate.isBefore(currentDate)) {
+      currentDay = currentDate.diff(startDate, "day") + 1;
+    }
+
+    return `${event.title}（共${totalDays}天，第${currentDay}天）`;
   }
   return `${dayjs(event.start).format("HH:mm")} - ${dayjs(event.end).format(
     "HH:mm"
@@ -1226,7 +1255,6 @@ onMounted(() => {
   height: 100%;
   background-color: #fff;
   border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   overflow: hidden;
 
   &__header {
@@ -1284,31 +1312,11 @@ onMounted(() => {
   }
 
   &__event-item {
-    display: flex;
-    align-items: center;
-    padding: 8px 12px;
-    border-radius: 6px;
+    padding: 4px;
+    border-radius: 4px;
     cursor: pointer;
     transition: background-color 0.2s ease;
-
-    &:hover {
-      background-color: #f5f5f5;
-    }
-
-    &--temp {
-      background-color: #f0f7eb;
-      border: 1px solid #67c23a;
-    }
-
-    &--cross-day {
-      background-color: #e1f3d8;
-      border: 1px solid #67c23a;
-    }
-
-    &--single-day {
-      background-color: #e1f3d8;
-      border: 1px solid #67c23a;
-    }
+    border-left: 3px solid transparent;
   }
 
   &__event-color {
@@ -1321,23 +1329,22 @@ onMounted(() => {
   &__event-content {
     flex: 1;
     display: flex;
-    flex-direction: column;
-  }
-
-  &__event-title {
-    font-size: 14px;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
     font-weight: 500;
     color: #333;
-    margin-bottom: 4px;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  &__event-time {
-    font-size: 12px;
-    color: #666;
-    line-height: 1.2;
+  &__event-color-block {
+    width: 6px;
+    height: 6px;
+    border-radius: 2px;
+    margin-left: 8px;
+    flex-shrink: 0;
   }
 }
 </style>
