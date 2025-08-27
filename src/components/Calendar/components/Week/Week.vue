@@ -11,10 +11,17 @@ import {
 import dayjs from "dayjs";
 import { useWeekView } from "./composables";
 import { useColorUtils } from "../../hooks/useColorUtils";
+import { useOverlapUtils } from "../../hooks/useOverlapUtils";
 import type { WeekEvent, CalendarEmits, WeekAllDayEvent } from "./types";
-import { EventType, type BaseEventData } from "../../types/events";
+import { EventType } from "../../types/events";
+import {
+  createEventFromForm,
+  createEventFromWeekEvent,
+} from "../../utils/eventFactory";
 import EventForm from "@/components/EventForm/EventForm.vue";
 import EventPopover from "@/components/EventPopover/EventPopover.vue";
+import { ElIcon } from "element-plus";
+import { CaretBottom } from "@element-plus/icons-vue";
 
 // Props
 const props = defineProps({
@@ -125,6 +132,41 @@ const timeBlockElement = ref<HTMLElement | null>(null);
 // 添加一个变量来记录拖动开始时的原始时间块信息
 const originalTimeBlockInfo = ref<any>(null);
 
+// 添加一个变量来防止重复触发事件更新
+const eventUpdateProcessed = ref<Set<string>>(new Set());
+
+// 移除不再使用的持久化数据管理
+// const finalEventData = ref<Map<string, any>>(new Map());
+
+// const persistEventData = (eventId: string, eventData: any) => {
+//   finalEventData.value.set(eventId, {
+//     date: eventData.date,
+//     startTime: eventData.startTime,
+//     duration: eventData.duration,
+//     top: eventData.top,
+//     height: eventData.height,
+//     timestamp: Date.now(),
+//   });
+
+//   console.log("持久化保存事件数据:", {
+//     id: eventId,
+//     data: finalEventData.value.get(eventId),
+//   });
+// };
+
+// 添加一个函数来恢复事件数据
+// const restoreEventData = (eventId: string) => {
+//   const savedData = finalEventData.value.get(eventId);
+//   if (savedData) {
+//     console.log("恢复保存的事件数据:", {
+//       id: eventId,
+//       data: savedData,
+//     });
+//     return savedData;
+//   }
+//   return null;
+// };
+
 // 计算timeBlock的fixed位置
 const getTimeBlockFixedPosition = () => {
   if (!timeBlock.value) return null;
@@ -195,20 +237,6 @@ const setupResizeObserver = () => {
   return resizeObserver;
 };
 
-// 获取时间列的宽度
-const getTimeColumnWidth = () => {
-  // 动态计算列宽
-  const container = document.querySelector(".week-view__time-column-container");
-  if (container) {
-    const containerWidth = container.clientWidth;
-    const columnCount = weekRange.value.length;
-    return containerWidth / columnCount;
-  }
-
-  // 如果无法获取容器，使用估算值
-  return 200;
-};
-
 // 添加调试日志
 console.log("Week component props:", {
   selectedDate: props.selectedDate,
@@ -261,25 +289,8 @@ const handleFormTimeChanged = (timeData: { start: string; end: string }) => {
 // 处理表单提交
 const handleFormSubmit = (eventData: any) => {
   // 将表单数据转换为BaseEventData格式
-  const baseEvent: BaseEventData = {
-    id: eventData.id,
-    title: eventData.title,
-    start: eventData.start,
-    end: eventData.end,
-    color: eventData.color,
-    sourceType: 1, // 默认为日程
-    openScopeType: 1, // 默认为公开
-    allDay: eventData.allDay,
-    tuCname: undefined,
-    scheduleType: 1, // 默认为工作
-    roomName: undefined,
-    self: true,
-    remindType: undefined,
-    isTechEvent: false,
-    isMultiDay: false,
-    ids: undefined,
-  };
-  
+  const baseEvent = createEventFromForm(eventData);
+
   // 发射事件创建事件
   emit(EventType.EVENT_CHANGE, {
     event: baseEvent,
@@ -418,6 +429,12 @@ const watchDragState = () => {
     console.log("Week: 开始拖动，隐藏表单");
     showForm.value = false;
 
+    // 拖拽开始时，清除 activeEventId，避免拖拽过程中事件状态混乱
+    if (activeEventId.value) {
+      console.log("拖拽开始，清除 activeEventId:", activeEventId.value);
+      activeEventId.value = null;
+    }
+
     // 记录拖动开始时的原始信息
     // 注意：每次拖拽开始时都要重新记录，因为时间块可能在之前的拖拽中已经被修改
     if (timeBlock.value) {
@@ -452,6 +469,13 @@ const watchDragState = () => {
         timeBlock.value
       ) {
         console.log("Week: 拖拽完全结束，显示表单");
+
+        // 拖拽结束后，保持 activeEventId 为 null，避免状态混乱
+        // 只有在用户真正点击事件时才会设置 activeEventId
+        if (activeEventId.value) {
+          console.log("拖拽结束后，清除 activeEventId:", activeEventId.value);
+          activeEventId.value = null;
+        }
 
         // 检查是否发生了日期切换（仅用于日志记录，不修改时间块数据）
         // 注意：useTimelineDrag.ts 已经正确处理了日期切换和时间保持
@@ -517,14 +541,674 @@ const watchDragState = () => {
 // 监听拖动状态变化
 watch(
   () => [dragState.value.isDragging, dragState.value.isResizing],
-  watchDragState,
+  ([isDragging, isResizing]) => {
+    // 调用原有的 watchDragState 函数
+    watchDragState();
+
+    // 当开始拖动时，重置事件更新标志
+    if (isDragging || isResizing) {
+      eventUpdateProcessed.value.clear();
+
+      // 拖拽开始时，确保 activeEventId 被清除
+      if (activeEventId.value) {
+        console.log("拖拽状态变化，清除 activeEventId:", activeEventId.value);
+        activeEventId.value = null;
+      }
+    }
+
+    // 当拖动状态变为 false 时，检查是否是事件拖动完成
+    if (
+      !isDragging &&
+      !isResizing &&
+      dragState.value.currentBlock?.isEventDrag
+    ) {
+      const block = dragState.value.currentBlock;
+      const originalEvent = block.originalEvent;
+
+      if (originalEvent && !eventUpdateProcessed.value.has(originalEvent.id)) {
+        console.log("事件拖动状态重置，更新事件数据:", {
+          original: {
+            date: originalEvent.date,
+            startTime: originalEvent.startTime,
+            duration: originalEvent.duration,
+          },
+          new: {
+            date: block.date,
+            startTime: block.startTime,
+            duration: block.duration,
+          },
+        });
+
+        // 标记此事件已处理，防止重复触发
+        eventUpdateProcessed.value.add(originalEvent.id);
+
+        // 更新原始事件数据
+        originalEvent.date = block.date;
+        originalEvent.startTime = block.startTime;
+        originalEvent.duration = block.duration;
+
+        // 重新计算事件的位置和尺寸
+        originalEvent.top = block.top;
+        originalEvent.height = block.height;
+
+        // 发出事件更新事件
+        emit(EventType.EVENT_CHANGE, {
+          event: createEventFromWeekEvent(originalEvent),
+          el:
+            (document.querySelector(
+              `[data-event-id="${originalEvent.id}"]`
+            ) as HTMLElement) || document.body,
+        });
+      }
+    }
+  },
   { immediate: true }
 );
 
+// 监听拖动结束时间，更新事件数据
+watch(
+  () => dragState.value.lastDragEndTime,
+  (newTime) => {
+    if (newTime && dragState.value.currentBlock?.isEventDrag) {
+      const block = dragState.value.currentBlock;
+      const originalEvent = block.originalEvent;
+
+      if (originalEvent && !eventUpdateProcessed.value.has(originalEvent.id)) {
+        console.log("事件拖动完成，更新事件数据:", {
+          original: {
+            date: originalEvent.date,
+            startTime: originalEvent.startTime,
+            duration: originalEvent.duration,
+          },
+          new: {
+            date: block.date,
+            startTime: block.startTime,
+            duration: block.duration,
+          },
+        });
+
+        // 标记此事件已处理，防止重复触发
+        eventUpdateProcessed.value.add(originalEvent.id);
+
+        // 更新原始事件数据
+        originalEvent.date = block.date;
+        originalEvent.startTime = block.startTime;
+        originalEvent.duration = block.duration;
+
+        // 重新计算事件的位置和尺寸
+        originalEvent.top = block.top;
+        originalEvent.height = block.height;
+
+        // 发出事件更新事件
+        emit(EventType.EVENT_CHANGE, {
+          event: createEventFromWeekEvent(originalEvent),
+          el:
+            (document.querySelector(
+              `[data-event-id="${originalEvent.id}"]`
+            ) as HTMLElement) || document.body,
+        });
+
+        console.log("事件拖动完成，最终事件数据:", {
+          id: originalEvent.id,
+          date: originalEvent.date,
+          startTime: originalEvent.startTime,
+          duration: originalEvent.duration,
+          top: originalEvent.top,
+          height: originalEvent.height,
+        });
+
+        // 强制触发响应式更新，确保事件数据被保存
+        nextTick(() => {
+          // 再次确认事件数据已保存
+          console.log("nextTick后确认事件数据:", {
+            id: originalEvent.id,
+            date: originalEvent.date,
+            startTime: originalEvent.startTime,
+            duration: originalEvent.duration,
+            top: originalEvent.top,
+            height: originalEvent.height,
+          });
+
+          // 确保事件数据被正确保存到 timeEventsByDate 中
+          const currentTimeEvents = timeEventsByDate.value;
+          if (currentTimeEvents[originalEvent.date]) {
+            // 检查是否已经存在该事件
+            const existingEvent = currentTimeEvents[originalEvent.date].find(
+              (e: any) => e.id === originalEvent.id
+            );
+            if (!existingEvent) {
+              currentTimeEvents[originalEvent.date].push(originalEvent);
+              console.log(
+                `拖动完成后，确保事件 ${originalEvent.id} 在 timeEventsByDate 的日期列 ${originalEvent.date} 中`
+              );
+            }
+          }
+        });
+      }
+    }
+  }
+);
+
+// 添加一个专门的拖动结束监听器，确保最终更改能够正确应用
+watch(
+  () => [dragState.value.isDragging, dragState.value.isResizing],
+  ([isDragging, isResizing], [oldIsDragging, oldIsResizing]) => {
+    // 当拖动状态从 true 变为 false 时，确保事件数据正确保存
+    if ((oldIsDragging || oldIsResizing) && !isDragging && !isResizing) {
+      const block = dragState.value.currentBlock;
+      if (block?.isEventDrag && block.originalEvent) {
+        const originalEvent = block.originalEvent;
+
+        // 确保最终的位置和时间被正确保存
+        originalEvent.date = block.date;
+        originalEvent.startTime = block.startTime;
+        originalEvent.duration = block.duration;
+        originalEvent.top = block.top;
+        originalEvent.height = block.height;
+
+        console.log("拖动状态结束，最终保存事件数据:", {
+          id: originalEvent.id,
+          date: originalEvent.date,
+          startTime: originalEvent.startTime,
+          duration: originalEvent.duration,
+          top: originalEvent.top,
+          height: originalEvent.height,
+        });
+
+        // 强制触发响应式更新
+        nextTick(() => {
+          // 确保UI更新
+          console.log("拖动结束，强制更新UI");
+
+          // 拖动结束后，确保事件在正确的日期列中
+          const currentTimeEvents = timeEventsByDate.value;
+          if (currentTimeEvents[originalEvent.date]) {
+            // 检查是否已经存在该事件
+            const existingEvent = currentTimeEvents[originalEvent.date].find(
+              (e: any) => e.id === originalEvent.id
+            );
+            if (!existingEvent) {
+              currentTimeEvents[originalEvent.date].push(originalEvent);
+              console.log(
+                `拖动结束后，确保事件 ${originalEvent.id} 在正确的日期列 ${originalEvent.date} 中`
+              );
+            }
+          }
+
+          // 清理拖动状态，确保不会影响后续操作
+          if (draggingEventState.value) {
+            console.log("拖动结束后清理拖动状态");
+            draggingEventState.value = null;
+            draggingEventId.value = null;
+          }
+        });
+      } else {
+        // 即使没有事件块，也要清理拖动状态
+        if (draggingEventState.value) {
+          console.log("拖动结束后清理拖动状态（无事件块）");
+          draggingEventState.value = null;
+          draggingEventId.value = null;
+        }
+      }
+    }
+  }
+);
+
+// 添加一个专门的拖动事件状态管理
+const draggingEventState = ref<{
+  event: any;
+  date: string;
+  top: number;
+  height: number;
+  startTime: number;
+  duration: number;
+} | null>(null);
+
+// 添加一个标记来跟踪拖动中的事件ID，避免重复处理
+const draggingEventId = ref<string | null>(null);
+
+// 监听拖动状态变化，同步拖动中的事件块位置
+watch(
+  () => dragState.value.currentBlock,
+  (newBlock, oldBlock) => {
+    if (
+      newBlock?.isEventDrag &&
+      (dragState.value.isDragging || dragState.value.isResizing)
+    ) {
+      const originalEvent = newBlock.originalEvent;
+      if (originalEvent) {
+        // 如果是新的拖动事件，重置状态
+        if (draggingEventId.value !== originalEvent.id) {
+          draggingEventId.value = originalEvent.id;
+          draggingEventState.value = null; // 重置状态
+
+          // 新事件拖动开始时，强制清理所有日期列中的重复事件
+          const currentTimeEvents = timeEventsByDate.value;
+          Object.keys(currentTimeEvents).forEach((date) => {
+            if (currentTimeEvents[date]) {
+              const beforeLength = currentTimeEvents[date].length;
+              currentTimeEvents[date] = currentTimeEvents[date].filter(
+                (e) => e.id !== originalEvent.id
+              );
+              const afterLength = currentTimeEvents[date].length;
+              if (beforeLength !== afterLength) {
+                console.log(
+                  `新拖动开始时，清理日期列 ${date} 中的重复事件:`,
+                  originalEvent.id
+                );
+              }
+            }
+          });
+        }
+
+        // 避免重复更新相同的数据
+        const hasChanged =
+          !draggingEventState.value ||
+          draggingEventState.value.top !== newBlock.top ||
+          draggingEventState.value.height !== newBlock.height ||
+          draggingEventState.value.startTime !== newBlock.startTime ||
+          draggingEventState.value.duration !== newBlock.duration ||
+          draggingEventState.value.date !== newBlock.date;
+
+        if (hasChanged) {
+          // 更新拖动事件状态
+          draggingEventState.value = {
+            event: originalEvent,
+            date: newBlock.date || originalEvent.date,
+            top: newBlock.top || originalEvent.top,
+            height: newBlock.height || originalEvent.height,
+            startTime: newBlock.startTime || originalEvent.startTime,
+            duration: newBlock.duration || originalEvent.duration,
+          };
+
+          // 直接更新原始事件数据，确保拖动过程中事件位置正确
+          originalEvent.top = draggingEventState.value.top;
+          originalEvent.height = draggingEventState.value.height;
+          originalEvent.startTime = draggingEventState.value.startTime;
+          originalEvent.duration = draggingEventState.value.duration;
+          originalEvent.date = draggingEventState.value.date;
+
+          console.log("拖动状态变化，同步事件位置:", {
+            id: originalEvent.id,
+            top: originalEvent.top,
+            height: originalEvent.height,
+            startTime: originalEvent.startTime,
+            duration: originalEvent.duration,
+            date: originalEvent.date,
+          });
+        }
+      }
+    } else if (!dragState.value.isDragging && !dragState.value.isResizing) {
+      // 拖动结束，清除拖动事件状态
+      if (draggingEventState.value) {
+        console.log("拖动结束，清除拖动事件状态");
+
+        // 确保拖动结束后事件数据被正确保存
+        const originalEvent = draggingEventState.value.event;
+        if (originalEvent) {
+          // 更新原始事件数据
+          originalEvent.date = draggingEventState.value.date;
+          originalEvent.startTime = draggingEventState.value.startTime;
+          originalEvent.duration = draggingEventState.value.duration;
+          originalEvent.top = draggingEventState.value.top;
+          originalEvent.height = draggingEventState.value.height;
+
+          console.log("拖动结束后保存事件数据:", {
+            id: originalEvent.id,
+            date: originalEvent.date,
+            startTime: originalEvent.startTime,
+            duration: originalEvent.duration,
+            top: originalEvent.top,
+            height: originalEvent.height,
+          });
+
+          // 确保事件在正确的日期列中
+          const currentTimeEvents = timeEventsByDate.value;
+          if (currentTimeEvents[originalEvent.date]) {
+            // 检查是否已经存在该事件
+            const existingEvent = currentTimeEvents[originalEvent.date].find(
+              (e: any) => e.id === originalEvent.id
+            );
+            if (!existingEvent) {
+              currentTimeEvents[originalEvent.date].push(originalEvent);
+              console.log(
+                `拖动结束后，确保事件 ${originalEvent.id} 在正确的日期列 ${originalEvent.date} 中`
+              );
+            }
+          }
+        }
+
+        draggingEventState.value = null;
+        draggingEventId.value = null;
+      }
+    }
+  },
+  { deep: true, immediate: false }
+);
+
+// 修改 draggingEvent 计算属性，使用稳定的状态
+const draggingEvent = computed(() => {
+  return draggingEventState.value?.event || null;
+});
+
+// 添加一个专门的日期变化监听器，确保X轴拖动时事件块能够正确跟随
+watch(
+  () => dragState.value.currentBlock?.date,
+  (newDate, oldDate) => {
+    if (
+      dragState.value.currentBlock?.isEventDrag &&
+      (dragState.value.isDragging || dragState.value.isResizing)
+    ) {
+      const block = dragState.value.currentBlock;
+      const originalEvent = block.originalEvent;
+
+      if (originalEvent && newDate && newDate !== oldDate) {
+        // 避免重复更新相同的数据
+        if (draggingEventState.value?.date !== newDate) {
+          console.log("X轴拖动日期变化:", {
+            from: oldDate,
+            to: newDate,
+            eventId: originalEvent.id,
+            isDragging: dragState.value.isDragging,
+            isResizing: dragState.value.isResizing,
+          });
+
+          // 更新原始事件的日期
+          originalEvent.date = newDate;
+
+          // 强制触发响应式更新
+          nextTick(() => {
+            console.log("X轴拖动后事件块位置更新:", {
+              id: originalEvent.id,
+              newDate: originalEvent.date,
+              top: originalEvent.top,
+              height: originalEvent.height,
+            });
+          });
+        }
+      }
+    }
+  }
+);
+
+// 添加一个计算属性来确保拖动中的事件块能够正确显示
+// const draggingEvent = computed(() => {
+//   if (
+//     dragState.value.currentBlock?.isEventDrag &&
+//     (dragState.value.isDragging || dragState.value.isResizing)
+//   ) {
+//     return dragState.value.currentBlock.originalEvent;
+//   }
+//   return null;
+// });
+
+// 添加调试信息
+watch(draggingEvent, (newEvent) => {
+  if (newEvent) {
+    console.log("拖动事件状态变化:", {
+      id: newEvent.id,
+      date: newEvent.date,
+      top: newEvent.top,
+      height: newEvent.height,
+      isDragging: dragState.value.isDragging,
+      isResizing: dragState.value.isResizing,
+    });
+  }
+});
+
+// 修改 timeEventsByDate 的计算，确保拖动中的事件块能够正确显示
+const timeEventsByDateWithDrag = computed(() => {
+  const result = { ...timeEventsByDate.value };
+
+  // 拖动中的事件处理
+  if (draggingEventState.value && draggingEventId.value) {
+    const event = draggingEventState.value.event;
+    const date = draggingEventState.value.date;
+
+    console.log("拖动中的事件块:", {
+      id: event.id,
+      date: date,
+      top: draggingEventState.value.top,
+      height: draggingEventState.value.height,
+      startTime: draggingEventState.value.startTime,
+      duration: draggingEventState.value.duration,
+    });
+
+    // 彻底清理所有日期列中的重复事件，确保没有残留
+    Object.keys(result).forEach((otherDate) => {
+      if (result[otherDate]) {
+        const beforeLength = result[otherDate].length;
+        result[otherDate] = result[otherDate].filter((e) => e.id !== event.id);
+        const afterLength = result[otherDate].length;
+        if (beforeLength !== afterLength) {
+          console.log(`从日期列 ${otherDate} 中移除重复事件:`, event.id);
+        }
+      }
+    });
+
+    // 确保拖动中的事件块在正确的日期列中显示
+    if (!result[date]) {
+      result[date] = [];
+    }
+
+    // 创建拖动中的事件块副本，使用 draggingEventState 中的最新数据
+    const draggingEventBlock = {
+      ...event,
+      top: draggingEventState.value.top,
+      height: draggingEventState.value.height,
+      startTime: draggingEventState.value.startTime,
+      duration: draggingEventState.value.duration,
+      date: draggingEventState.value.date,
+    };
+
+    // 检查是否已经存在该事件，如果存在则更新，不存在则添加
+    const existingEventIndex = result[date].findIndex((e) => e.id === event.id);
+    if (existingEventIndex === -1) {
+      // 添加新事件
+      result[date].push(draggingEventBlock);
+      console.log("添加拖动中的事件块到日期列:", date);
+    } else {
+      // 更新现有事件
+      result[date][existingEventIndex] = draggingEventBlock;
+      console.log("更新拖动中的事件块位置:", date);
+    }
+  }
+
+  // 拖动结束后，确保事件在正确的位置显示
+  if (!dragState.value.isDragging && !dragState.value.isResizing) {
+    // 从 timeEventsByDate 中获取最新的事件数据，确保拖动结束后的事件位置正确
+    const baseEvents = timeEventsByDate.value;
+    Object.keys(baseEvents).forEach((date) => {
+      const events = baseEvents[date];
+      if (events && events.length > 0) {
+        events.forEach((event) => {
+          // 检查该事件是否在正确的日期列中
+          if (event.date === date) {
+            // 确保事件在正确的日期列中
+            if (!result[date]) {
+              result[date] = [];
+            }
+
+            // 检查是否已经存在该事件
+            const existingEvent = result[date].find((e) => e.id === event.id);
+            if (!existingEvent) {
+              result[date].push(event);
+              console.log(
+                `拖动结束后，确保事件 ${event.id} 在正确的日期列 ${date} 中`
+              );
+            }
+          }
+        });
+      }
+    });
+
+    // 拖动结束后，清理拖动状态，确保不会影响后续操作
+    if (draggingEventState.value) {
+      console.log("拖动结束，清理拖动状态");
+      draggingEventState.value = null;
+      draggingEventId.value = null;
+    }
+  }
+
+  // 重新计算重叠样式，确保拖动的事件不会覆盖已有事件
+  Object.keys(result).forEach((date) => {
+    const events = result[date];
+    if (events.length > 1) {
+      // 使用现有的重叠计算逻辑
+      const { processOverlappingEvents } = useOverlapUtils();
+      const processedEvents = processOverlappingEvents(events);
+      // 更新事件的重叠样式
+      processedEvents.forEach((processedEvent: any) => {
+        const originalEvent = events.find((e) => e.id === processedEvent.id);
+        if (originalEvent) {
+          originalEvent.overlapStyle = processedEvent.overlapStyle;
+          console.log("更新事件重叠样式:", {
+            id: originalEvent.id,
+            overlapStyle: originalEvent.overlapStyle,
+          });
+        }
+      });
+    }
+  });
+
+  // 最终安全检查：确保没有重复事件ID（简化版本）
+  Object.keys(result).forEach((date) => {
+    const events = result[date];
+    if (events && events.length > 0) {
+      const eventIds = new Set();
+      const uniqueEvents = [];
+
+      for (const event of events) {
+        if (!eventIds.has(event.id)) {
+          eventIds.add(event.id);
+          uniqueEvents.push(event);
+        } else {
+          console.log(`发现重复事件，移除: ${event.id} 在日期 ${date}`);
+        }
+      }
+
+      // 如果发现有重复事件被移除，更新结果
+      if (uniqueEvents.length !== events.length) {
+        result[date] = uniqueEvents;
+        console.log(
+          `日期 ${date} 清理重复事件后，事件数量从 ${events.length} 变为 ${uniqueEvents.length}`
+        );
+      }
+    }
+  });
+
+  // 调试：检查最终的事件分布
+  console.log(
+    "最终事件分布:",
+    Object.keys(result).map((date) => ({
+      date,
+      eventCount: result[date]?.length || 0,
+      events:
+        result[date]?.map((e) => ({
+          id: e.id,
+          top: e.top,
+          startTime: e.startTime,
+        })) || [],
+    }))
+  );
+
+  return result;
+});
+
+// 移除冲突的鼠标移动监听器，改用响应式监听器
+// const setupDragMouseMoveListener = () => {
+//   const handleMouseMove = (event: MouseEvent) => {
+//     if (dragState.value.isDragging || dragState.value.isResizing) {
+//       const block = dragState.value.currentBlock;
+//       if (block?.isEventDrag && block.originalEvent) {
+//         // 实时更新拖动中的事件块位置
+//         const originalEvent = block.originalEvent;
+//
+//         console.log("拖动中鼠标移动:", {
+//           clientY: event.clientY,
+//           startY: dragState.value.startY,
+//           deltaY: event.clientY - dragState.value.startY,
+//           dragType: dragState.value.dragType,
+//           isDragging: dragState.value.isDragging,
+//           isResizing: dragState.value.isResizing
+//         });
+//
+//         // 根据鼠标位置计算新的位置
+//         if (dragState.value.dragType === "move") {
+//           // 移动操作：更新Y轴位置
+//           const deltaY = event.clientY - dragState.value.startY;
+//           const newTop = Math.max(0, dragState.value.startTop + deltaY);
+//           originalEvent.top = newTop;
+//
+//           // 计算新的开始时间
+//           const newStartTime = pixelsToMinutes(newTop);
+//           originalEvent.startTime = newStartTime;
+//
+//           console.log("移动操作更新:", {
+//             newTop,
+//             newStartTime,
+//             originalTop: dragState.value.startTop,
+//             originalStartTime: block.startTime
+//           });
+//         } else if (dragState.value.dragType === "resize-top") {
+//           // 调整顶部：更新高度和开始时间
+//           const deltaY = event.clientY - dragState.value.startY;
+//           const newHeight = Math.max(15, dragState.value.startHeight - deltaY);
+//           const newTop = dragState.value.startTop + deltaY;
+//
+//           originalEvent.height = newHeight;
+//           originalEvent.top = newTop;
+//           originalEvent.startTime = pixelsToMinutes(newTop);
+//           originalEvent.duration = pixelsToMinutes(newHeight);
+//
+//           console.log("调整顶部更新:", {
+//             newHeight,
+//             newTop,
+//             newStartTime: originalEvent.startTime,
+//             newDuration: originalEvent.duration
+//           });
+//         } else if (dragState.value.dragType === "resize-bottom") {
+//           // 调整底部：更新高度
+//           const deltaY = event.clientY - dragState.value.startY;
+//           const newHeight = Math.max(15, dragState.value.startHeight + deltaY);
+//
+//           originalEvent.height = newHeight;
+//           originalEvent.duration = pixelsToMinutes(newHeight);
+//
+//           console.log("调整底部更新:", {
+//             newHeight,
+//             newDuration: originalEvent.duration
+//           });
+//         }
+//
+//         // 强制触发响应式更新
+//         nextTick(() => {
+//           console.log("鼠标移动中实时更新事件:", {
+//             id: originalEvent.id,
+//             top: originalEvent.top,
+//             height: originalEvent.height,
+//             startTime: originalEvent.startTime,
+//             duration: originalEvent.duration
+//           });
+//         });
+//       }
+//     }
+//   };
+
+//   document.addEventListener("mousemove", handleMouseMove);
+
+//   // 清理函数
+//   onUnmounted(() => {
+//     document.removeEventListener("mousemove", handleMouseMove);
+//   });
+// };
+
 // 处理事件点击
-const handleEventClick = (event: WeekEvent | WeekAllDayEvent, e: MouseEvent) => {
+const handleEventClick = (
+  event: WeekEvent | WeekAllDayEvent,
+  e: MouseEvent
+) => {
   const targetElement = e.currentTarget as HTMLElement;
-  activeEventId.value = event.id;
 
   // 在拖拽过程中，保护 timeBlock 不被清空
   if (dragState.value.isDragging || dragState.value.isResizing) {
@@ -541,32 +1225,152 @@ const handleEventClick = (event: WeekEvent | WeekAllDayEvent, e: MouseEvent) => 
       return;
     }
   }
-  safeClearTimeBlock();
+
+  // 只有在没有拖拽状态时才清空 timeBlock
+  if (!dragState.value.isDragging && !dragState.value.isResizing) {
+    safeClearTimeBlock();
+  }
+
+  // 设置 activeEventId（只在轻点时设置）
+  activeEventId.value = event.id;
+
   // 将事件转换为BaseEventData格式
-  const baseEvent: BaseEventData = {
-    id: event.id,
-    title: event.title,
-    start: 'startTime' in event 
-      ? dayjs(event.date).add(event.startTime, 'minute').format('YYYY-MM-DD HH:mm')
-      : `${event.date} 00:00`,
-    end: 'startTime' in event 
-      ? dayjs(event.date).add(event.startTime + event.duration, 'minute').format('YYYY-MM-DD HH:mm')
-      : `${event.date} 23:59`,
-    color: event.color,
-    sourceType: 1, // 默认为日程
-    openScopeType: 1, // 默认为公开
-    allDay: event.allDay,
-    tuCname: undefined,
-    scheduleType: 1, // 默认为工作
-    roomName: undefined,
-    self: true,
-    remindType: undefined,
-    isTechEvent: false,
-    isMultiDay: false,
-    ids: undefined,
-  };
-  
+  const baseEvent = createEventFromWeekEvent(event);
+
   emit(EventType.EVENT_CLICK, { event: baseEvent, el: targetElement });
+};
+
+// 处理事件块拖动
+const handleEventBlockMouseDown = (event: MouseEvent, eventData: WeekEvent) => {
+  event.preventDefault();
+  event.stopPropagation();
+
+  const target = event.currentTarget as HTMLElement;
+  const rect = target.getBoundingClientRect();
+  const clickY = event.clientY - rect.top;
+
+  // 定义边缘区域的大小（像素）
+  const edgeThreshold = 8;
+
+  // 记录鼠标按下时的位置和时间
+  const mouseDownInfo = {
+    x: event.clientX,
+    y: event.clientY,
+    time: Date.now(),
+  };
+
+  // 创建鼠标移动和抬起事件处理器
+  const handleMouseMove = (moveEvent: MouseEvent) => {
+    const deltaX = Math.abs(moveEvent.clientX - mouseDownInfo.x);
+    const deltaY = Math.abs(moveEvent.clientY - mouseDownInfo.y);
+    const moveThreshold = 5; // 5像素的移动阈值
+
+    // 如果移动距离超过阈值，认为是拖拽操作
+    if (deltaX > moveThreshold || deltaY > moveThreshold) {
+      // 移除事件监听器
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+
+      // 开始拖拽逻辑
+      startDragOperation(event, eventData, clickY, edgeThreshold);
+    }
+  };
+
+  const handleMouseUp = (upEvent: MouseEvent) => {
+    const deltaTime = Date.now() - mouseDownInfo.time;
+    const deltaX = Math.abs(upEvent.clientX - mouseDownInfo.x);
+    const deltaY = Math.abs(upEvent.clientY - mouseDownInfo.y);
+    const clickThreshold = 5; // 5像素的点击阈值
+    const timeThreshold = 200; // 200ms的时间阈值
+
+    // 移除事件监听器
+    document.removeEventListener("mousemove", handleMouseMove);
+    document.removeEventListener("mouseup", handleMouseUp);
+
+    // 如果移动距离和时间都在阈值内，认为是轻点操作
+    if (
+      deltaX <= clickThreshold &&
+      deltaY <= clickThreshold &&
+      deltaTime <= timeThreshold
+    ) {
+      console.log("检测到轻点操作，不触发拖拽");
+      // 轻点时不触发拖拽，只处理点击事件
+      return;
+    }
+
+    // 如果移动距离超过阈值，开始拖拽
+    if (deltaX > clickThreshold || deltaY > clickThreshold) {
+      startDragOperation(event, eventData, clickY, edgeThreshold);
+    }
+  };
+
+  // 添加事件监听器
+  document.addEventListener("mousemove", handleMouseMove);
+  document.addEventListener("mouseup", handleMouseUp);
+};
+
+// 提取拖拽操作逻辑到单独的函数
+const startDragOperation = (
+  event: MouseEvent,
+  eventData: WeekEvent,
+  clickY: number,
+  edgeThreshold: number
+) => {
+  // 拖动开始前，彻底清理之前可能残留的拖动状态和重复事件
+  if (draggingEventState.value) {
+    console.log("拖动新事件前，清理之前的拖动状态");
+    draggingEventState.value = null;
+    draggingEventId.value = null;
+  }
+
+  // 强制清理所有日期列中可能存在的重复事件
+  const currentTimeEvents = timeEventsByDate.value;
+  Object.keys(currentTimeEvents).forEach((date) => {
+    if (currentTimeEvents[date]) {
+      const beforeLength = currentTimeEvents[date].length;
+      currentTimeEvents[date] = currentTimeEvents[date].filter(
+        (e) => e.id !== eventData.id
+      );
+      const afterLength = currentTimeEvents[date].length;
+      if (beforeLength !== afterLength) {
+        console.log(
+          `拖动开始前，清理日期列 ${date} 中的重复事件:`,
+          eventData.id
+        );
+      }
+    }
+  });
+
+  // 创建临时的时间块用于拖动，确保包含所有必要的属性
+  const tempTimeBlock = {
+    id: eventData.id,
+    date: eventData.date,
+    startTime: eventData.startTime,
+    duration: eventData.duration,
+    top: eventData.top,
+    height: eventData.height,
+    isEventDrag: true, // 标记这是事件拖动
+    originalEvent: eventData, // 保存原始事件数据
+    // 添加拖动过程中需要的属性
+    _tempDisplayDate: eventData.date, // 临时显示日期
+    _tempDisplayTop: eventData.top, // 临时显示位置
+    _tempDisplayHeight: eventData.height, // 临时显示高度
+  };
+
+  console.log("Week: 开始拖动事件块，事件信息:", tempTimeBlock);
+
+  // 检测是否点击在顶部边缘区域
+  if (clickY <= edgeThreshold) {
+    startTimeBlockDrag(event, tempTimeBlock, "resize-top");
+  }
+  // 检测是否点击在底部边缘区域
+  else if (clickY >= tempTimeBlock.height - edgeThreshold) {
+    startTimeBlockDrag(event, tempTimeBlock, "resize-bottom");
+  }
+  // 其他区域为移动操作
+  else {
+    startTimeBlockDrag(event, tempTimeBlock, "move");
+  }
 };
 
 // 处理时间列点击事件
@@ -588,7 +1392,6 @@ const handleTimeColumnClick = (event: MouseEvent, date: string) => {
   }
 
   // 将像素位置转换为分钟数
-  const clickMinutes = pixelsToMinutes(clickY);
   const snappedMinutes = snapToQuarter(clickY);
 
   // 检查是否点击到了事件块
@@ -671,6 +1474,71 @@ const handleTimeBlockMouseDown = (event: MouseEvent) => {
   // 定义边缘区域的大小（像素）
   const edgeThreshold = 8;
 
+  // 记录鼠标按下时的位置和时间
+  const mouseDownInfo = {
+    x: event.clientX,
+    y: event.clientY,
+    time: Date.now(),
+  };
+
+  // 创建鼠标移动和抬起事件处理器
+  const handleMouseMove = (moveEvent: MouseEvent) => {
+    const deltaX = Math.abs(moveEvent.clientX - mouseDownInfo.x);
+    const deltaY = Math.abs(moveEvent.clientY - mouseDownInfo.y);
+    const moveThreshold = 5; // 5像素的移动阈值
+
+    // 如果移动距离超过阈值，认为是拖拽操作
+    if (deltaX > moveThreshold || deltaY > moveThreshold) {
+      // 移除事件监听器
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+
+      // 开始拖拽逻辑
+      startTimeBlockDragOperation(event, clickY, edgeThreshold);
+    }
+  };
+
+  const handleMouseUp = (upEvent: MouseEvent) => {
+    const deltaTime = Date.now() - mouseDownInfo.time;
+    const deltaX = Math.abs(upEvent.clientX - mouseDownInfo.x);
+    const deltaY = Math.abs(upEvent.clientY - mouseDownInfo.y);
+    const clickThreshold = 5; // 5像素的点击阈值
+    const timeThreshold = 200; // 200ms的时间阈值
+
+    // 移除事件监听器
+    document.removeEventListener("mousemove", handleMouseMove);
+    document.removeEventListener("mouseup", handleMouseUp);
+
+    // 如果移动距离和时间都在阈值内，认为是轻点操作
+    if (
+      deltaX <= clickThreshold &&
+      deltaY <= clickThreshold &&
+      deltaTime <= timeThreshold
+    ) {
+      console.log("检测到时间块轻点操作，不触发拖拽");
+      // 轻点时不触发拖拽
+      return;
+    }
+
+    // 如果移动距离超过阈值，开始拖拽
+    if (deltaX > clickThreshold || deltaY > clickThreshold) {
+      startTimeBlockDragOperation(event, clickY, edgeThreshold);
+    }
+  };
+
+  // 添加事件监听器
+  document.addEventListener("mousemove", handleMouseMove);
+  document.addEventListener("mouseup", handleMouseUp);
+};
+
+// 提取时间块拖拽操作逻辑到单独的函数
+const startTimeBlockDragOperation = (
+  event: MouseEvent,
+  clickY: number,
+  edgeThreshold: number
+) => {
+  if (!timeBlock.value) return;
+
   // 在开始拖动前，记录原始的时间块信息
   const originalTimeBlock = {
     date: timeBlock.value.date,
@@ -687,7 +1555,7 @@ const handleTimeBlockMouseDown = (event: MouseEvent) => {
     startTimeBlockDrag(event, timeBlock.value, "resize-top");
   }
   // 检测是否点击在底部边缘区域
-  else if (clickY >= rect.height - edgeThreshold) {
+  else if (clickY >= timeBlock.value.height - edgeThreshold) {
     startTimeBlockDrag(event, timeBlock.value, "resize-bottom");
   }
   // 其他区域为移动操作
@@ -701,22 +1569,50 @@ const handleTimeBlockMouseDown = (event: MouseEvent) => {
   });
 };
 
-// 组件挂载后设置ResizeObserver
+// 添加调试函数
+const debugEventState = () => {
+  console.log("=== 事件状态调试信息 ===");
+  console.log("timeEventsByDate:", timeEventsByDate.value);
+  console.log("timeEventsByDateWithDrag:", timeEventsByDateWithDrag.value);
+  console.log("draggingEventState:", draggingEventState.value);
+  console.log("dragState:", dragState.value);
+  console.log("timeBlock:", timeBlock.value);
+  console.log("activeEventId:", activeEventId.value);
+  console.log("showForm:", showForm.value);
+  console.log("========================");
+};
+
+// 在组件挂载时设置鼠标移动监听器
 onMounted(() => {
   setupResizeObserver();
-  
+  // setupDragMouseMoveListener(); // 移除此行
+
   // 添加全局点击事件监听器
   const handleGlobalClick = (e: MouseEvent) => {
     const target = e.target as HTMLElement;
-    
+
+    // 在拖拽过程中，不清空 activeEventId，避免状态混乱
+    if (dragState.value.isDragging || dragState.value.isResizing) {
+      console.log("拖拽过程中，不清空 activeEventId");
+      return;
+    }
+
     // 清空activeEventId
-    if (!target.closest(".week-view__all-day-event") && !target.closest(".week-view__time-event")) {
+    if (
+      !target.closest(".week-view__all-day-event") &&
+      !target.closest(".week-view__time-event")
+    ) {
       activeEventId.value = null;
     }
+
+    // 调试事件状态
+    if (target.closest(".week-view__time-event")) {
+      setTimeout(debugEventState, 100);
+    }
   };
-  
+
   document.addEventListener("click", handleGlobalClick);
-  
+
   // 清理函数
   onUnmounted(() => {
     document.removeEventListener("click", handleGlobalClick);
@@ -759,20 +1655,11 @@ onMounted(() => {
           @click="toggleAllDayExpanded"
           :title="isAllDayExpanded ? '收起' : '展开'"
         >
-          <svg
+          <ElIcon
             class="week-view__expand-icon"
             :class="{ 'week-view__expand-icon--expanded': isAllDayExpanded }"
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.5"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <polyline points="6,9 12,15 18,9"></polyline>
-          </svg>
+            ><CaretBottom
+          /></ElIcon>
         </button>
       </div>
 
@@ -802,7 +1689,8 @@ onMounted(() => {
                   dayjs(),
                   'day'
                 ),
-                'week-view__all-day-event--active': activeEventId === crossDayEvent.id,
+                'week-view__all-day-event--active':
+                  activeEventId === crossDayEvent.id,
               }"
               :style="{
                 backgroundColor: crossDayEvent.color
@@ -844,7 +1732,8 @@ onMounted(() => {
                   'week-view__all-day-event--past': dayjs(
                     dateInfo.date
                   ).isBefore(dayjs(), 'day'),
-                  'week-view__all-day-event--active': activeEventId === singleDayEvent.id,
+                  'week-view__all-day-event--active':
+                    activeEventId === singleDayEvent.id,
                 }"
                 :style="{
                   backgroundColor: singleDayEvent.color
@@ -911,15 +1800,24 @@ onMounted(() => {
 
             <!-- 时间事件 -->
             <div
-              v-for="event in timeEventsByDate[dateInfo.date]"
+              v-for="event in timeEventsByDateWithDrag[dateInfo.date]"
               :key="event.id"
               class="week-view__event-block"
+              :data-event-id="event.id"
               :class="{
                 'week-view__event-block--past': dayjs(dateInfo.date).isBefore(
                   dayjs(),
                   'day'
                 ),
                 'week-view__event-block--active': activeEventId === event.id,
+                'week-view__event-block--dragging':
+                  dragState.isDragging &&
+                  dragState.currentBlock?.isEventDrag &&
+                  dragState.currentBlock?.originalEvent?.id === event.id,
+                'week-view__event-block--resizing':
+                  dragState.isResizing &&
+                  dragState.currentBlock?.isEventDrag &&
+                  dragState.currentBlock?.originalEvent?.id === event.id,
               }"
               :style="{
                 top: `${event.top}px`,
@@ -929,8 +1827,17 @@ onMounted(() => {
                 left: `calc(${event.overlapStyle?.left || '0%'})`,
                 width: `calc(${event.overlapStyle?.width || '100%'})`,
                 zIndex: event.overlapStyle?.zIndex || 1,
+                // 拖动过程中提高z-index
+                ...((dragState.isDragging || dragState.isResizing) &&
+                dragState.currentBlock?.isEventDrag &&
+                dragState.currentBlock?.originalEvent?.id === event.id
+                  ? {
+                      zIndex: 20,
+                    }
+                  : {}),
               }"
               @click.stop="handleEventClick(event, $event)"
+              @mousedown.stop="handleEventBlockMouseDown($event, event)"
             >
               <div class="week-view__event-title">{{ event.title }}</div>
               <div class="week-view__event-time">

@@ -79,8 +79,6 @@ const computedWidth = computed(() => {
 
 // 计算Popover位置
 const updatePosition = async () => {
-  // console.log("props.targetElement", props.targetElement);
-
   if (!props.visible || !props.targetElement || !popoverRef.value) {
     return;
   }

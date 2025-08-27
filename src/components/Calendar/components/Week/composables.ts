@@ -313,7 +313,7 @@ export function useWeekDragHandlers(weekRange: Ref<WeekDateInfo[]>) {
     minDuration: 15,       // 最小15分钟
     dateRange: weekRange.value.map(d => d.date),
     getColumnWidth: calculateColumnWidth,
-    xAxisDragThreshold: 50 // 设置合适的X轴拖拽阈值，需要50px的移动才触发日期切换
+    xAxisDragThreshold: 20 // 降低X轴拖拽阈值，使日期切换更容易触发
   });
 
   // 监听窗口大小变化，重新计算列宽度

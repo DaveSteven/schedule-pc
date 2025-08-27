@@ -2,49 +2,92 @@
 .day-all-events {
   background: #fff;
   border-bottom: 1px solid #e8e8e8;
-  padding: 12px 0;
   display: flex;
   align-items: flex-start;
   gap: 1px;
-  min-height: 48px;
+  min-height: 80px;
   box-sizing: border-box;
+  box-shadow: 0px 2px 4px 0px rgba(0, 0, 0, 0.16);
+  z-index: 1;
 
   &__header {
     display: flex;
     flex-direction: column;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-start;
     height: 100%;
+    border-right: 1px solid #e8e8e8;
     color: #8c8c8c;
     min-width: 60px;
     flex-shrink: 0;
-    cursor: pointer;
-    transition: color 0.2s ease;
-
-    &:hover {
-      color: #666;
-    }
-
-    > div {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 24px;
-      height: 24px;
-      border-radius: 4px;
-      transition: background-color 0.2s ease;
-
-      &:hover {
-        background-color: rgba(0, 0, 0, 0.05);
-      }
-    }
+    padding-top: 4px;
+    font-size: 11px;
+    font-weight: 400;
   }
 
   &__content {
     flex: 1;
     display: flex;
+    padding-right: 16px;
+    padding-bottom: 8px;
+    gap: 24px;
+  }
+
+  &__left {
+    display: flex;
     flex-direction: column;
-    padding-right: 8px;
+    align-items: flex-end;
+    gap: 16px;
+    min-width: 120px;
+    flex-shrink: 0;
+  }
+
+  &__date {
+    display: flex;
+    flex-direction: row;
+    gap: 12px;
+    flex: 1;
+  }
+
+  &__date-number {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #9f58ff, #7c3aed);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 24px;
+    font-weight: 700;
+  }
+
+  &__date-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    text-align: left;
+  }
+
+  &__month-week {
+    font-size: 14px;
+    color: #666;
+    font-weight: 400;
+    white-space: nowrap;
+    color: var(--el-color-primary);
+  }
+
+  &__lunar {
+    font-size: 12px;
+    color: #90959f;
+    font-weight: 400;
+  }
+
+  &__right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
     gap: 8px;
   }
 
@@ -94,9 +137,25 @@
     }
   }
 
+  &__header-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 28px;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+
+    &:hover {
+      transform: scale(1.05);
+    }
+  }
+
   &__expand-icon {
     transition: transform 0.2s ease;
     flex-shrink: 0;
+    color: #666;
+    font-size: 16px;
 
     &--expanded {
       transform: rotate(180deg);
@@ -256,7 +315,7 @@
 
   &__time-block {
     transition: box-shadow 0.2s ease;
-    border-radius: 8px;
+    border-radius: 4px;
     background-color: #e9d8ff;
     border: 1px solid var(--primary-color, #9f58ff);
     cursor: move;

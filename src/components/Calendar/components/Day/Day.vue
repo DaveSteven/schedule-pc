@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, watch, nextTick } from "vue";
+import { ElIcon } from "element-plus";
+import { CaretBottom } from "@element-plus/icons-vue";
 import type { TimeEvent, DayProps, CalendarEmits } from "./types";
-import { EventType, type BaseEventData } from "../../types/events";
+import { EventType } from "../../types/events";
+import {
+  createEventFromForm,
+  createEventFromTimeEvent,
+} from "../../utils/eventFactory";
 import { useTimeUtils } from "../../hooks/useTimeUtils";
 import { useCurrentTime } from "../../hooks/useCurrentTime";
 import { useDragHandlers } from "../../hooks/useDragHandlers";
@@ -34,7 +40,8 @@ const formTargetElement = ref<HTMLElement | null>(null);
 const { formatTime, timeLabels } = useTimeUtils();
 const { currentTimeTop, shouldShowCurrentTime, scrollToCurrentTime } =
   useCurrentTime(props.selectedDate);
-const { dragState, startTimeBlockDrag, startEventDrag } = useDragHandlers(emit);
+const { dragState, startTimeBlockDrag, startEventDrag, setEventsRef } =
+  useDragHandlers(emit);
 const {
   timeBlock,
   showAllDayEvents,
@@ -46,6 +53,15 @@ const {
   handleTimelineClick,
   toggleAllDayEvents,
 } = useEventHandlers(props, emit, newEventElement);
+
+// 监听processedTimeEvents变化，更新拖动处理器中的事件引用
+watch(
+  processedTimeEvents,
+  (newEvents) => {
+    setEventsRef(newEvents);
+  },
+  { immediate: true }
+);
 
 // 计算timeBlock的fixed位置
 const getTimeBlockFixedPosition = () => {
@@ -132,25 +148,8 @@ const handleFormTimeChanged = (timeData: { start: string; end: string }) => {
 // 处理表单提交
 const handleFormSubmit = (eventData: any) => {
   // 将表单数据转换为BaseEventData格式
-  const baseEvent: BaseEventData = {
-    id: eventData.id,
-    title: eventData.title,
-    start: eventData.start,
-    end: eventData.end,
-    color: eventData.color,
-    sourceType: 1, // 默认为日程
-    openScopeType: 1, // 默认为公开
-    allDay: eventData.allDay,
-    tuCname: undefined,
-    scheduleType: 1, // 默认为工作
-    roomName: undefined,
-    self: true,
-    remindType: undefined,
-    isTechEvent: false,
-    isMultiDay: false,
-    ids: undefined,
-  };
-  
+  const baseEvent = createEventFromForm(eventData);
+
   // 发射事件创建事件
   emit(EventType.EVENT_CHANGE, {
     event: baseEvent,
@@ -271,6 +270,19 @@ watch(
   { immediate: true }
 );
 
+// 获取星期文本
+const getWeekdayText = (day: number): string => {
+  const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
+  return weekdays[day];
+};
+
+// 获取农历日期（简化版本，实际项目中可能需要引入农历库）
+const getLunarDate = (date: string): string => {
+  // 这里返回一个占位符，实际项目中可以引入农历库
+  // 例如：lunar-javascript 或类似的库
+  return "五月初三"; // 临时占位符
+};
+
 // 本地全天事件点击处理函数
 const handleAllDayEventClick = (event: any, e: MouseEvent, dragState: any) => {
   // 如果正在拖拽且已经移动，不处理点击
@@ -352,27 +364,10 @@ const handleEventClick = (event: TimeEvent, e: MouseEvent) => {
 
   const targetElement = e.currentTarget as HTMLElement;
   activeEventId.value = event.id;
-  
+
   // 将TimeEvent转换为BaseEventData格式
-  const baseEvent: BaseEventData = {
-    id: event.id,
-    title: event.title,
-    start: dayjs(props.selectedDate).add(event.startTime, 'minute').format('YYYY-MM-DD HH:mm'),
-    end: dayjs(props.selectedDate).add(event.startTime + event.duration, 'minute').format('YYYY-MM-DD HH:mm'),
-    color: event.color,
-    sourceType: 1, // 默认为日程
-    openScopeType: 1, // 默认为公开
-    allDay: event.allDay,
-    tuCname: undefined,
-    scheduleType: 1, // 默认为工作
-    roomName: undefined,
-    self: true,
-    remindType: undefined,
-    isTechEvent: false,
-    isMultiDay: false,
-    ids: undefined,
-  };
-  
+  const baseEvent = createEventFromTimeEvent(event, props.selectedDate);
+
   emit(EventType.EVENT_CLICK, {
     event: baseEvent,
     el: targetElement,
@@ -482,49 +477,62 @@ onMounted(() => {
   <div v-if="allDayEvents.length > 0" class="day-all-events">
     <div class="day-all-events__header">
       <span class="text-11px">GMT+8</span>
-      <div @click="toggleAllDayEvents" class="day-all-events__header-icon">
-        <svg
-          class="day-all-events__expand-icon"
-          :class="{ 'day-all-events__expand-icon--expanded': showAllDayEvents }"
-          width="24"
-          height="24"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          stroke-width="1.5"
-          stroke-linecap="round"
-          stroke-linejoin="round"
-        >
-          <polyline points="6,9 12,15 18,9"></polyline>
-        </svg>
-      </div>
     </div>
     <div class="day-all-events__content">
-      <div class="day-all-events__list">
-        <div
-          v-for="event in visibleAllDayEvents"
-          :key="event.id"
-          class="day-all-events__item"
-          :class="{
-            'day-all-events__item--active': activeAllDayEventId === event.id,
-          }"
-          :style="{
-            backgroundColor: event.color
-              ? lightenColor(event.color, 0.8)
-              : '#f5f5f5',
-            borderLeft: `3px solid ${event.color}`,
-          }"
-          @click="handleAllDayEventClick(event, $event, dragState)"
-        >
-          <span class="day-all-events__title">{{ event.title }}</span>
+      <!-- 左侧：日期和展开图标 -->
+      <div class="day-all-events__left">
+        <div class="day-all-events__date">
+          <div class="day-all-events__date-number">
+            {{ dayjs(selectedDate).date() }}
+          </div>
+          <div class="day-all-events__date-info">
+            <div class="day-all-events__month-week">
+              {{ dayjs(selectedDate).format("M月, 周")
+              }}{{ getWeekdayText(dayjs(selectedDate).day()) }}
+            </div>
+            <div class="day-all-events__lunar">
+              {{ getLunarDate(selectedDate) }}
+            </div>
+          </div>
+        </div>
+        <div @click="toggleAllDayEvents" class="day-all-events__header-icon">
+          <ElIcon
+            class="day-all-events__expand-icon"
+            :class="{
+              'day-all-events__expand-icon--expanded': showAllDayEvents,
+            }"
+            ><CaretBottom
+          /></ElIcon>
         </div>
       </div>
-      <div
-        v-if="allDayEvents.length > 2 && !showAllDayEvents"
-        class="day-all-events__toggle"
-        @click="toggleAllDayEvents"
-      >
-        <span v-if="hiddenCount > 0">还有{{ hiddenCount }}项</span>
+      <!-- 右侧：全天日程列表 -->
+      <div class="day-all-events__right">
+        <div class="day-all-events__list">
+          <div
+            v-for="event in visibleAllDayEvents"
+            :key="event.id"
+            class="day-all-events__item"
+            :class="{
+              'day-all-events__item--active': activeAllDayEventId === event.id,
+            }"
+            :style="{
+              backgroundColor: event.color
+                ? lightenColor(event.color, 0.8)
+                : '#f5f5f5',
+              borderLeft: `3px solid ${event.color}`,
+            }"
+            @click="handleAllDayEventClick(event, $event, dragState)"
+          >
+            <span class="day-all-events__title">{{ event.title }}</span>
+          </div>
+        </div>
+        <div
+          v-if="allDayEvents.length > 2 && !showAllDayEvents"
+          class="day-all-events__toggle"
+          @click="toggleAllDayEvents"
+        >
+          <span v-if="hiddenCount > 0">还有{{ hiddenCount }}项</span>
+        </div>
       </div>
     </div>
   </div>

@@ -69,14 +69,14 @@ export const mockDataConfig = {
   "/api/schedule/staff/queryCalendar": mockData([
     {
       id: "1",
-      name: "工作",
-      color: COLOR_PALETTE.PINK,
-      isDefault: 1,
-      defaultType: "WORK",
+      name: "陈可昕",
+      color: COLOR_PALETTE.PURPLE,
+      isDefault: 0,
+      defaultType: "PERSONAL",
     },
     {
       id: "2",
-      name: "任务",
+      name: "我的任务",
       color: COLOR_PALETTE.YELLOW,
       isDefault: 1,
       defaultType: "TASK",
@@ -90,17 +90,10 @@ export const mockDataConfig = {
     },
     {
       id: "4",
-      name: "会议",
-      color: "#1890ff",
+      name: "纪念日及生日祝福",
+      color: COLOR_PALETTE.PINK,
       isDefault: 0,
-      defaultType: "MEETING",
-    },
-    {
-      id: "5",
-      name: "出差",
-      color: "#fa541c",
-      isDefault: 0,
-      defaultType: "TRAVEL",
+      defaultType: "ANNIVERSARY",
     },
   ]),
 

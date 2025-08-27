@@ -1,12 +1,14 @@
 import { ref } from "vue";
 import type { DragState, TimeBlock, TimeEvent } from "../components/Day/types";
 import { useTimeUtils } from "./useTimeUtils";
+import { useOverlapUtils } from "./useOverlapUtils";
 
 /**
  * 拖拽功能相关的hooks
  */
 export function useDragHandlers(emit: any) {
   const { minutesToPixels, pixelsToMinutes, snapToQuarter } = useTimeUtils();
+  const { processOverlappingEvents } = useOverlapUtils();
 
   const dragState = ref<DragState>({
     isDragging: false,
@@ -34,6 +36,36 @@ export function useDragHandlers(emit: any) {
     hasMoved: false, // 新增：标记是否已经移动
     moveThreshold: 5, // 新增：移动阈值（像素）
   });
+
+  // 存储所有事件列表的引用，用于拖动过程中更新重叠样式
+  let allEventsRef: TimeEvent[] | null = null;
+
+  /**
+   * 设置事件列表引用
+   */
+  const setEventsRef = (events: TimeEvent[]) => {
+    allEventsRef = events;
+  };
+
+  /**
+   * 更新重叠样式
+   */
+  const updateOverlapStyles = () => {
+    if (!allEventsRef || allEventsRef.length === 0) return;
+
+    // 创建事件副本，避免修改原始数据
+    const eventsCopy = allEventsRef.map((event) => ({ ...event }));
+
+    // 重新计算重叠样式
+    const processedEvents = processOverlappingEvents(eventsCopy);
+
+    // 将新的重叠样式应用到原始事件
+    processedEvents.forEach((processedEvent, index) => {
+      if (allEventsRef && allEventsRef[index]) {
+        allEventsRef[index].overlapStyle = processedEvent.overlapStyle;
+      }
+    });
+  };
 
   /**
    * 开始拖拽时间块
@@ -105,29 +137,29 @@ export function useDragHandlers(emit: any) {
       // 从底部调整大小
       const newHeight = Math.max(15, dragState.value.startHeight + deltaY);
       const newDuration = pixelsToMinutes(newHeight);
-      
+
       // 先计算新的结束时间，然后吸附到15分钟间隔
       const newEndTime = snapToQuarter(dragState.value.startTime + newDuration);
-      
+
       // 基于吸附后的结束时间重新计算持续时间
       const snappedDuration = newEndTime - dragState.value.startTime;
-      
+
       console.log("resize-bottom 调试:", {
         originalStartTime: dragState.value.startTime,
         newHeight,
         newDuration,
         newEndTime,
         snappedDuration,
-        deltaY
+        deltaY,
       });
-      
+
       if (newEndTime <= 1440 && snappedDuration >= 15) {
         block.duration = snappedDuration;
         block.height = minutesToPixels(snappedDuration);
-        
+
         console.log("resize-bottom 更新完成:", {
           finalDuration: block.duration,
-          finalHeight: block.height
+          finalHeight: block.height,
         });
       }
     }
@@ -219,6 +251,27 @@ export function useDragHandlers(emit: any) {
         top: minutesToPixels(newStartTime),
         startTime: newStartTime,
       };
+
+      // 实时更新重叠样式
+      if (allEventsRef && allEventsRef.length > 0) {
+        // 临时更新当前拖动事件的时间，用于重叠计算
+        const originalStartTime = dragState.value.currentEvent.startTime;
+        const originalZIndex =
+          dragState.value.currentEvent.overlapStyle?.zIndex;
+
+        dragState.value.currentEvent.startTime = newStartTime;
+
+        // 更新重叠样式
+        updateOverlapStyles();
+
+        // 确保被拖动的事件显示在最上层
+        if (dragState.value.currentEvent.overlapStyle) {
+          dragState.value.currentEvent.overlapStyle.zIndex = 9999; // 设置最高层级
+        }
+
+        // 恢复原始时间，但保持最高zIndex
+        dragState.value.currentEvent.startTime = originalStartTime;
+      }
     }
   };
 
@@ -244,6 +297,9 @@ export function useDragHandlers(emit: any) {
       // 更新事件位置
       dragState.value.currentEvent.top = dragState.value.dragEventPosition.top;
       dragState.value.currentEvent.startTime = finalStartTime;
+
+      // 拖动结束后重新计算重叠样式，恢复正常的zIndex
+      updateOverlapStyles();
 
       console.log("事件拖拽完成:", {
         eventId: dragState.value.currentEvent.id,
@@ -307,5 +363,6 @@ export function useDragHandlers(emit: any) {
     startTimeBlockDrag,
     startEventDrag,
     stopEventDrag,
+    setEventsRef, // 导出设置事件引用的函数
   };
 }

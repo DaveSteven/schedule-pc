@@ -91,6 +91,7 @@ export function useTimelineDrag(options: DragOptions = {}) {
 
     console.log("开始拖拽时间块:", type, block);
 
+    // 重置拖拽状态
     dragState.value.isDragging = type === "move";
     dragState.value.isResizing = type !== "move";
     dragState.value.dragType = type;
@@ -103,19 +104,20 @@ export function useTimelineDrag(options: DragOptions = {}) {
     dragState.value.startDuration = block.duration;
     dragState.value.hasMoved = false;
 
-    // 初始化X轴拖拽状态
+    // 重置X轴拖拽状态
     if (enableXAxisDrag && block.date) {
       xDragState.value.startDate = block.date;
       xDragState.value.hasMovedX = false;
       xDragState.value.finalDeltaX = 0;
     }
 
+    // 添加鼠标移动和抬起事件监听器
     document.addEventListener("mousemove", handleTimeBlockDrag);
     document.addEventListener("mouseup", stopTimeBlockDrag);
   };
 
   /**
-   * 处理时间块拖拽
+   * 处理时间块拖拽过程中的鼠标移动
    */
   const handleTimeBlockDrag = (event: MouseEvent) => {
     if (!dragState.value.currentBlock) return;
@@ -123,74 +125,68 @@ export function useTimelineDrag(options: DragOptions = {}) {
     const deltaY = event.clientY - dragState.value.startY;
     const deltaX = event.clientX - dragState.value.startX;
 
-    // 检查是否已经移动超过阈值
-    if (
-      Math.abs(deltaY) > dragState.value.moveThreshold ||
-      Math.abs(deltaX) > dragState.value.moveThreshold
-    ) {
-      dragState.value.hasMoved = true;
-    }
+    // 检查是否真正移动了（超过阈值）
+    const hasMovedY = Math.abs(deltaY) > dragState.value.moveThreshold;
+    const hasMovedX = Math.abs(deltaX) > xDragState.value.moveThresholdX;
 
+    // 只有在真正移动时才更新拖拽状态
+    if (hasMovedY || hasMovedX) {
+      if (!dragState.value.hasMoved) {
+        dragState.value.hasMoved = true;
+        console.log("拖拽开始移动，超过阈值");
+      }
+
+      // 更新X轴拖拽状态
+      if (enableXAxisDrag && hasMovedX) {
+        if (!xDragState.value.hasMovedX) {
+          xDragState.value.hasMovedX = true;
+          console.log("X轴拖拽开始移动");
+        }
+        xDragState.value.finalDeltaX = deltaX;
+      }
+
+      // 处理Y轴拖拽（时间调整）
+      if (enableYAxisDrag && hasMovedY) {
+        handleYAxisDrag(deltaY);
+      }
+
+      // 处理X轴拖拽（日期切换）
+      if (enableXAxisDrag && hasMovedX) {
+        handleXAxisDrag(deltaX);
+      }
+    }
+  };
+
+  /**
+   * 处理Y轴拖拽（时间调整）
+   */
+  const handleYAxisDrag = (deltaY: number) => {
     const block = dragState.value.currentBlock;
+    if (!block) return;
 
     if (dragState.value.dragType === "move") {
-      // Y轴：调整时间
-      if (enableYAxisDrag) {
-        const newTop = Math.max(
-          0,
-          Math.min(
-            maxTimeHeight - block.height,
-            dragState.value.startTop + deltaY
-          )
-        );
-        const newStartTime = snapToQuarter(pixelsToMinutes(newTop));
+      // 移动操作：调整时间
+      const newTop = Math.max(
+        0,
+        Math.min(
+          maxTimeHeight - block.height,
+          dragState.value.startTop + deltaY
+        )
+      );
+      const newStartTime = snapToQuarter(pixelsToMinutes(newTop));
 
-        block.top = minutesToPixels(newStartTime);
-        block.startTime = newStartTime;
-      }
+      block.top = minutesToPixels(newStartTime);
+      block.startTime = newStartTime;
 
-      // X轴：拖拽过程中实时跟随，更新显示位置
-      if (enableXAxisDrag && dateRange.length > 0 && getColumnWidth) {
-        // 检查X轴是否移动超过阈值
-        if (Math.abs(deltaX) > xDragState.value.moveThresholdX) {
-          xDragState.value.hasMovedX = true;
-          xDragState.value.finalDeltaX = deltaX; // 记录最终的X轴偏移
-
-          const columnWidth = getColumnWidth();
-          if (columnWidth > 0) {
-            const dateOffset = Math.round(deltaX / columnWidth);
-            const currentDateIndex = dateRange.findIndex(
-              (d) => d === xDragState.value.startDate
-            );
-
-            if (currentDateIndex !== -1) {
-              const newDateIndex = Math.max(
-                0,
-                Math.min(dateRange.length - 1, currentDateIndex + dateOffset)
-              );
-              const newDate = dateRange[newDateIndex];
-
-              // 拖拽过程中实时跟随，只更新显示位置，不改变实际数据
-              if (newDate && newDate !== block.date) {
-                console.log(
-                  `X轴拖拽中：从 ${xDragState.value.startDate} 移动到 ${newDate}, 偏移: ${dateOffset}, 列宽: ${columnWidth}, deltaX: ${deltaX}`
-                );
-
-                // 在拖拽过程中，我们只更新显示用的临时日期，不改变实际的时间块数据
-                // 这样可以避免拖拽过程中的数据不一致问题
-                if (!block._tempDisplayDate) {
-                  block._tempDisplayDate = block.date; // 保存原始日期
-                }
-                block.date = newDate; // 临时更新显示日期
-              }
-            }
-          }
-        } else {
-          // 如果移动距离不够，重置X轴拖拽状态
-          xDragState.value.hasMovedX = false;
-          xDragState.value.finalDeltaX = 0;
-        }
-      }
+      console.log("Y轴拖拽调整:", {
+        deltaY,
+        newTop,
+        pixelsToMinutes: pixelsToMinutes(newTop),
+        snappedStartTime: newStartTime,
+        newHeight: minutesToPixels(block.duration), // 保持持续时间不变
+        startTime: dragState.value.startTime,
+        startDuration: dragState.value.startDuration,
+      });
     } else if (enableResize && dragState.value.dragType === "resize-top") {
       // 从顶部调整大小
       const newTop = Math.max(0, dragState.value.startTop + deltaY);
@@ -246,6 +242,46 @@ export function useTimelineDrag(options: DragOptions = {}) {
             originalStartTime: dragState.value.startTime,
           });
         }
+      }
+    }
+  };
+
+  /**
+   * 处理X轴拖拽（日期切换）
+   */
+  const handleXAxisDrag = (deltaX: number) => {
+    const block = dragState.value.currentBlock;
+    if (!block) return;
+
+    if (!getColumnWidth) return;
+
+    const columnWidth = getColumnWidth();
+    if (columnWidth <= 0) return;
+
+    const dateOffset = Math.round(deltaX / columnWidth);
+    const currentDateIndex = dateRange.findIndex(
+      (d) => d === xDragState.value.startDate
+    );
+
+    if (currentDateIndex !== -1) {
+      const newDateIndex = Math.max(
+        0,
+        Math.min(dateRange.length - 1, currentDateIndex + dateOffset)
+      );
+      const newDate = dateRange[newDateIndex];
+
+      // 拖拽过程中实时跟随，只更新显示位置，不改变实际数据
+      if (newDate && newDate !== block.date) {
+        console.log(
+          `X轴拖拽中：从 ${xDragState.value.startDate} 移动到 ${newDate}, 偏移: ${dateOffset}, 列宽: ${columnWidth}, deltaX: ${deltaX}`
+        );
+
+        // 在拖拽过程中，我们只更新显示用的临时日期，不改变实际的时间块数据
+        // 这样可以避免拖拽过程中的数据不一致问题
+        if (!block._tempDisplayDate) {
+          block._tempDisplayDate = block.date; // 保存原始日期
+        }
+        block.date = newDate; // 临时更新显示日期
       }
     }
   };
@@ -314,6 +350,28 @@ export function useTimelineDrag(options: DragOptions = {}) {
           }
         }
       }
+    }
+
+    // 如果是事件拖拽，确保事件数据被正确保存
+    if (dragState.value.currentBlock?.isEventDrag && dragState.value.currentBlock?.originalEvent) {
+      const block = dragState.value.currentBlock;
+      const originalEvent = block.originalEvent;
+      
+      // 更新原始事件数据
+      originalEvent.date = block.date;
+      originalEvent.startTime = block.startTime;
+      originalEvent.duration = block.duration;
+      originalEvent.top = block.top;
+      originalEvent.height = block.height;
+      
+      console.log("拖拽结束，保存事件数据:", {
+        id: originalEvent.id,
+        date: originalEvent.date,
+        startTime: originalEvent.startTime,
+        duration: originalEvent.duration,
+        top: originalEvent.top,
+        height: originalEvent.height,
+      });
     }
 
     // 只有在真正移动过的情况下才记录拖拽结束时间

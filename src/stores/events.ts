@@ -29,6 +29,11 @@ const transformFollowerLeaderData = (data: any[]): EventItem[] => {
       userItem.list.forEach((dateSchedule: any) => {
         if (dateSchedule.list && Array.isArray(dateSchedule.list)) {
           dateSchedule.list.forEach((schedule: any) => {
+            // 判断是否为跨天事件
+            const startDate = dayjs(schedule.startDate);
+            const endDate = dayjs(schedule.endDate);
+            const isMultiDay = startDate.format("YYYY-MM-DD") !== endDate.format("YYYY-MM-DD");
+            
             events.push({
               id: schedule.id,
               title: schedule.content,
@@ -42,6 +47,8 @@ const transformFollowerLeaderData = (data: any[]): EventItem[] => {
               remindType: schedule.remindType,
               allDay:
                 schedule.startTime === "00:00" && schedule.endTime === "23:59",
+              // 添加跨天标记
+              isMultiDay,
               // 添加用户信息，用于筛选
               userName: userName,
               userId: userId, // 添加用户ID用于筛选
