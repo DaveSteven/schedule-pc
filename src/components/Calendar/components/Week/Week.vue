@@ -61,14 +61,9 @@ const {
   timeBlock,
   createTimeBlock,
   clearTimeBlock,
-  protectedClearTimeBlock,
-  hasTimeBlock,
   dragState,
   startTimeBlockDrag,
   shouldIgnoreClick,
-  // 时间工具函数
-  minutesToPixels,
-  pixelsToMinutes,
   snapToQuarter,
   formatTime,
 } = useWeekView(toRef(props, "selectedDate"), toRef(props, "events"));
@@ -94,35 +89,6 @@ const safeClearTimeBlock = () => {
   clearTimeBlock();
 };
 
-// 创建一个受保护的 timeBlock 引用
-const protectedTimeBlock = computed({
-  get: () => timeBlock.value,
-  set: (newValue) => {
-    // 如果尝试设置为 null 且正在拖拽，则阻止
-    if (
-      newValue === null &&
-      (dragState.value.isDragging || dragState.value.isResizing)
-    ) {
-      console.log("拖拽过程中，阻止 timeBlock 被设置为 null");
-      return;
-    }
-
-    // 如果尝试设置为 null 且刚刚完成拖拽，则阻止
-    if (newValue === null && dragState.value.lastDragEndTime) {
-      const timeSinceDrag = Date.now() - dragState.value.lastDragEndTime;
-      if (timeSinceDrag < 1000) {
-        console.log(
-          `拖拽刚结束 ${timeSinceDrag}ms，阻止 timeBlock 被设置为 null`
-        );
-        return;
-      }
-    }
-
-    // 允许设置值
-    timeBlock.value = newValue;
-  },
-});
-
 // 表单相关状态
 const showForm = ref(false);
 const eventFormData = ref<any>(null);
@@ -134,38 +100,6 @@ const originalTimeBlockInfo = ref<any>(null);
 
 // 添加一个变量来防止重复触发事件更新
 const eventUpdateProcessed = ref<Set<string>>(new Set());
-
-// 移除不再使用的持久化数据管理
-// const finalEventData = ref<Map<string, any>>(new Map());
-
-// const persistEventData = (eventId: string, eventData: any) => {
-//   finalEventData.value.set(eventId, {
-//     date: eventData.date,
-//     startTime: eventData.startTime,
-//     duration: eventData.duration,
-//     top: eventData.top,
-//     height: eventData.height,
-//     timestamp: Date.now(),
-//   });
-
-//   console.log("持久化保存事件数据:", {
-//     id: eventId,
-//     data: finalEventData.value.get(eventId),
-//   });
-// };
-
-// 添加一个函数来恢复事件数据
-// const restoreEventData = (eventId: string) => {
-//   const savedData = finalEventData.value.get(eventId);
-//   if (savedData) {
-//     console.log("恢复保存的事件数据:", {
-//       id: eventId,
-//       data: savedData,
-//     });
-//     return savedData;
-//   }
-//   return null;
-// };
 
 // 计算timeBlock的fixed位置
 const getTimeBlockFixedPosition = () => {
@@ -420,6 +354,202 @@ watch(
     });
   },
   { immediate: true }
+);
+
+// 统一的拖拽状态变化处理函数
+const handleDragStateChange = (
+  newVal: {
+    isDragging: boolean;
+    isResizing: boolean;
+    currentBlock: any;
+    lastDragEndTime: number | null;
+    timeBlock: any;
+  },
+  oldVal: {
+    isDragging: boolean;
+    isResizing: boolean;
+    currentBlock: any;
+    lastDragEndTime: number | null;
+    timeBlock: any;
+  }
+) => {
+  console.log("Week: 拖拽状态变化:", {
+    new: newVal,
+    old: oldVal,
+    isDragging: newVal.isDragging,
+    isResizing: newVal.isResizing,
+    lastDragEndTime: newVal.lastDragEndTime,
+    timeSinceDrag: newVal.lastDragEndTime
+      ? Date.now() - newVal.lastDragEndTime
+      : null,
+  });
+
+  // 当开始拖动时，隐藏表单并记录原始信息
+  if (newVal.isDragging || newVal.isResizing) {
+    console.log("Week: 开始拖动，隐藏表单");
+    showForm.value = false;
+
+    // 拖拽开始时，清除 activeEventId，避免拖拽过程中事件状态混乱
+    if (activeEventId.value) {
+      console.log("拖拽开始，清除 activeEventId:", activeEventId.value);
+      activeEventId.value = null;
+    }
+
+    // 记录拖动开始时的原始信息
+    // 注意：每次拖拽开始时都要重新记录，因为时间块可能在之前的拖拽中已经被修改
+    if (newVal.timeBlock) {
+      originalTimeBlockInfo.value = {
+        date: newVal.timeBlock.date,
+        startTime: newVal.timeBlock.startTime,
+        duration: newVal.timeBlock.duration,
+        top: newVal.timeBlock.top,
+        height: newVal.timeBlock.height,
+      };
+      console.log(
+        "Week: 记录拖动开始时的原始信息:",
+        originalTimeBlockInfo.value
+      );
+    }
+  }
+
+  // 当拖动结束时，重新显示表单并更新目标元素
+  if (!newVal.isDragging && !newVal.isResizing && newVal.timeBlock) {
+    console.log("Week: 拖动结束，重新显示表单");
+
+    // 延迟显示表单，确保拖拽状态完全重置
+    setTimeout(() => {
+      // 再次检查拖拽状态，确保没有新的拖拽开始
+      if (!newVal.isDragging && !newVal.isResizing && newVal.timeBlock) {
+        console.log("Week: 拖拽完全结束，显示表单");
+
+        // 拖拽结束后，保持 activeEventId 为 null，避免状态混乱
+        // 只有在用户真正点击事件时才会设置 activeEventId
+        if (activeEventId.value) {
+          console.log("拖拽结束后，清除 activeEventId:", activeEventId.value);
+          activeEventId.value = null;
+        }
+
+        // 检查是否发生了日期切换（仅用于日志记录，不修改时间块数据）
+        // 注意：useTimelineDrag.ts 已经正确处理了日期切换和时间保持
+        const hasDateChanged =
+          originalTimeBlockInfo.value &&
+          originalTimeBlockInfo.value.date !== newVal.timeBlock.date;
+
+        if (hasDateChanged) {
+          console.log("Week: 检测到日期切换:", {
+            from: originalTimeBlockInfo.value.date,
+            to: newVal.timeBlock.date,
+          });
+
+          // 不再手动恢复时间，因为 useTimelineDrag.ts 已经正确处理
+          console.log(
+            "Week: 日期切换已由 useTimelineDrag.ts 处理，保持当前时间:",
+            {
+              currentStartTime: newVal.timeBlock.startTime,
+              currentDuration: newVal.timeBlock.duration,
+              newDate: newVal.timeBlock.date,
+            }
+          );
+        }
+
+        // 更新表单数据以反映拖动后的时间和日期
+        // 注意：不要使用 toISOString()，因为它会转换为 UTC 时间，导致日期偏移
+        const startDateTime = dayjs(newVal.timeBlock.date)
+          .startOf("day")
+          .add(newVal.timeBlock.startTime, "minute");
+        const endDateTime = dayjs(newVal.timeBlock.date)
+          .startOf("day")
+          .add(
+            newVal.timeBlock.startTime + newVal.timeBlock.duration,
+            "minute"
+          );
+
+        eventFormData.value = {
+          title: "",
+          start: startDateTime.format(), // 使用 format() 而不是 toISOString()
+          end: endDateTime.format(), // 使用 format() 而不是 toISOString()
+          allDay: false,
+          color: "#409EFF",
+        };
+
+        console.log("Week: 拖动结束后更新表单数据:", {
+          newDate: newVal.timeBlock.date,
+          newStartTime: newVal.timeBlock.startTime,
+          newDuration: newVal.timeBlock.duration,
+          startDateTime: startDateTime.format(),
+          endDateTime: endDateTime.format(),
+        });
+
+        // 更新表单目标元素
+        nextTick(() => {
+          formTargetElement.value = timeBlockElement.value as HTMLElement;
+          showForm.value = true;
+
+          // 更新fixed位置
+          updateFixedPosition();
+        });
+      }
+    }, 300); // 增加到300ms，确保拖拽状态完全重置
+  }
+
+  // 当拖动状态变为 false 时，检查是否是事件拖动完成
+  if (
+    !newVal.isDragging &&
+    !newVal.isResizing &&
+    newVal.currentBlock?.isEventDrag
+  ) {
+    const block = newVal.currentBlock;
+    const originalEvent = block.originalEvent;
+
+    if (originalEvent && !eventUpdateProcessed.value.has(originalEvent.id)) {
+      console.log("事件拖动状态重置，更新事件数据:", {
+        original: {
+          date: originalEvent.date,
+          startTime: originalEvent.startTime,
+          duration: originalEvent.duration,
+        },
+        new: {
+          date: block.date,
+          startTime: block.startTime,
+          duration: block.duration,
+        },
+      });
+
+      // 标记此事件已处理，防止重复触发
+      eventUpdateProcessed.value.add(originalEvent.id);
+
+      // 更新原始事件数据
+      originalEvent.date = block.date;
+      originalEvent.startTime = block.startTime;
+      originalEvent.duration = block.duration;
+
+      // 重新计算事件的位置和尺寸
+      originalEvent.top = block.top;
+      originalEvent.height = block.height;
+
+      // 发出事件更新事件
+      emit(EventType.EVENT_CHANGE, {
+        event: createEventFromWeekEvent(originalEvent),
+        el:
+          (document.querySelector(
+            `[data-event-id="${originalEvent.id}"]`
+          ) as HTMLElement) || document.body,
+      });
+    }
+  }
+};
+
+// 合并的watch监听器 - 替换多个重复的watch
+watch(
+  () => ({
+    isDragging: dragState.value.isDragging,
+    isResizing: dragState.value.isResizing,
+    currentBlock: dragState.value.currentBlock,
+    lastDragEndTime: dragState.value.lastDragEndTime,
+    timeBlock: timeBlock.value,
+  }),
+  handleDragStateChange,
+  { deep: true, immediate: false }
 );
 
 // 监听拖动状态变化，控制表单显示
@@ -931,17 +1061,6 @@ watch(
   }
 );
 
-// 添加一个计算属性来确保拖动中的事件块能够正确显示
-// const draggingEvent = computed(() => {
-//   if (
-//     dragState.value.currentBlock?.isEventDrag &&
-//     (dragState.value.isDragging || dragState.value.isResizing)
-//   ) {
-//     return dragState.value.currentBlock.originalEvent;
-//   }
-//   return null;
-// });
-
 // 添加调试信息
 watch(draggingEvent, (newEvent) => {
   if (newEvent) {
@@ -1114,94 +1233,6 @@ const timeEventsByDateWithDrag = computed(() => {
 
   return result;
 });
-
-// 移除冲突的鼠标移动监听器，改用响应式监听器
-// const setupDragMouseMoveListener = () => {
-//   const handleMouseMove = (event: MouseEvent) => {
-//     if (dragState.value.isDragging || dragState.value.isResizing) {
-//       const block = dragState.value.currentBlock;
-//       if (block?.isEventDrag && block.originalEvent) {
-//         // 实时更新拖动中的事件块位置
-//         const originalEvent = block.originalEvent;
-//
-//         console.log("拖动中鼠标移动:", {
-//           clientY: event.clientY,
-//           startY: dragState.value.startY,
-//           deltaY: event.clientY - dragState.value.startY,
-//           dragType: dragState.value.dragType,
-//           isDragging: dragState.value.isDragging,
-//           isResizing: dragState.value.isResizing
-//         });
-//
-//         // 根据鼠标位置计算新的位置
-//         if (dragState.value.dragType === "move") {
-//           // 移动操作：更新Y轴位置
-//           const deltaY = event.clientY - dragState.value.startY;
-//           const newTop = Math.max(0, dragState.value.startTop + deltaY);
-//           originalEvent.top = newTop;
-//
-//           // 计算新的开始时间
-//           const newStartTime = pixelsToMinutes(newTop);
-//           originalEvent.startTime = newStartTime;
-//
-//           console.log("移动操作更新:", {
-//             newTop,
-//             newStartTime,
-//             originalTop: dragState.value.startTop,
-//             originalStartTime: block.startTime
-//           });
-//         } else if (dragState.value.dragType === "resize-top") {
-//           // 调整顶部：更新高度和开始时间
-//           const deltaY = event.clientY - dragState.value.startY;
-//           const newHeight = Math.max(15, dragState.value.startHeight - deltaY);
-//           const newTop = dragState.value.startTop + deltaY;
-//
-//           originalEvent.height = newHeight;
-//           originalEvent.top = newTop;
-//           originalEvent.startTime = pixelsToMinutes(newTop);
-//           originalEvent.duration = pixelsToMinutes(newHeight);
-//
-//           console.log("调整顶部更新:", {
-//             newHeight,
-//             newTop,
-//             newStartTime: originalEvent.startTime,
-//             newDuration: originalEvent.duration
-//           });
-//         } else if (dragState.value.dragType === "resize-bottom") {
-//           // 调整底部：更新高度
-//           const deltaY = event.clientY - dragState.value.startY;
-//           const newHeight = Math.max(15, dragState.value.startHeight + deltaY);
-//
-//           originalEvent.height = newHeight;
-//           originalEvent.duration = pixelsToMinutes(newHeight);
-//
-//           console.log("调整底部更新:", {
-//             newHeight,
-//             newDuration: originalEvent.duration
-//           });
-//         }
-//
-//         // 强制触发响应式更新
-//         nextTick(() => {
-//           console.log("鼠标移动中实时更新事件:", {
-//             id: originalEvent.id,
-//             top: originalEvent.top,
-//             height: originalEvent.height,
-//             startTime: originalEvent.startTime,
-//             duration: originalEvent.duration
-//           });
-//         });
-//       }
-//     }
-//   };
-
-//   document.addEventListener("mousemove", handleMouseMove);
-
-//   // 清理函数
-//   onUnmounted(() => {
-//     document.removeEventListener("mousemove", handleMouseMove);
-//   });
-// };
 
 // 处理事件点击
 const handleEventClick = (
