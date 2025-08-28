@@ -1,4 +1,5 @@
 import Color from "color";
+import dayjs from "dayjs";
 import _ from "lodash";
 
 /**
@@ -38,4 +39,23 @@ export const lightenColor = (color: string, opacity: number = 0.8) => {
   } catch (error) {
     return color;
   }
+};
+
+export const getNewScheduleTime = (
+  s: Date | string | dayjs.Dayjs = new Date()
+): { start: string; end: string } => {
+  let startTime = dayjs(s);
+  let startMinute: number | string = dayjs(s).minute();
+
+  if (startMinute >= 0 && startMinute < 30) {
+    startTime = startTime.set("minutes", 30);
+  } else {
+    startTime = startTime.add(1, "hour").set("minute", 0);
+  }
+
+  let endTime = dayjs(startTime).add(1, "hour");
+
+  const start = startTime.format("YYYY-MM-DD HH:mm");
+  const end = endTime.format("YYYY-MM-DD HH:mm");
+  return { start, end };
 };

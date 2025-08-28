@@ -135,7 +135,7 @@
       :width="440"
       @close="handleFormCancel"
     >
-      <EventForm
+      <EventMiniForm
         :data="eventFormData"
         @time-changed="handleFormTimeChanged"
         @submit="handleFormSubmit"
@@ -208,7 +208,7 @@ import type { EventItem } from "../../utils/events";
 import { EventType } from "../../types/events";
 import { createEventFromExisting } from "../../utils/eventFactory";
 import EventPopover from "@/components/EventPopover/EventPopover.vue";
-import EventForm from "@/components/EventForm/EventForm.vue";
+import EventMiniForm from "@/components/EventMiniForm";
 import { ElScrollbar } from "element-plus";
 
 // Props

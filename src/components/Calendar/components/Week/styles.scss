@@ -67,7 +67,7 @@
   &__all-day-section {
     display: flex;
     border-bottom: 1px solid #e8e8e8;
-    min-height: 70px;
+    max-height: 70px;
     background: #fff;
     z-index: 10;
     box-shadow: 0px 2px 4px 0px rgba(0, 0, 0, 0.16);
@@ -80,7 +80,6 @@
     justify-content: space-between;
     width: 70px;
     min-width: 70px;
-    padding: 5px 16px;
     font-size: 14px;
     color: #8c8c8c;
     font-weight: 500;
@@ -122,7 +121,6 @@
 
   &__all-day-events-column {
     position: relative;
-    min-height: 24px;
   }
 
   // 全天事件样式

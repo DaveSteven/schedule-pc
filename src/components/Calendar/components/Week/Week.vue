@@ -18,10 +18,11 @@ import {
   createEventFromForm,
   createEventFromWeekEvent,
 } from "../../utils/eventFactory";
-import EventForm from "@/components/EventForm/EventForm.vue";
+import EventMiniForm from "@/components/EventMiniForm";
 import EventPopover from "@/components/EventPopover/EventPopover.vue";
 import { ElIcon, ElScrollbar } from "element-plus";
 import { CaretBottom } from "@element-plus/icons-vue";
+import { debounce } from "lodash";
 
 // Props
 const props = defineProps({
@@ -67,6 +68,14 @@ const {
   snapToQuarter,
   formatTime,
 } = useWeekView(toRef(props, "selectedDate"), toRef(props, "events"));
+
+// 判断整个周是否有全天日程
+const hasAllDayEvents = computed(() => {
+  return weekRange.value.some((dateInfo) => {
+    const allDayData = getAllDayEventsForDate(dateInfo.date);
+    return allDayData.totalCount > 0;
+  });
+});
 
 // 添加一个受保护的清空函数
 const safeClearTimeBlock = () => {
@@ -951,12 +960,16 @@ watch(
             duration: newBlock.duration || originalEvent.duration,
           };
 
-          // 直接更新原始事件数据，确保拖动过程中事件位置正确
-          originalEvent.top = draggingEventState.value.top;
-          originalEvent.height = draggingEventState.value.height;
-          originalEvent.startTime = draggingEventState.value.startTime;
-          originalEvent.duration = draggingEventState.value.duration;
-          originalEvent.date = draggingEventState.value.date;
+          // 使用lodash防抖机制更新原始事件数据，避免频繁更新
+          const newPosition = {
+            top: draggingEventState.value.top,
+            height: draggingEventState.value.height,
+            startTime: draggingEventState.value.startTime,
+            duration: draggingEventState.value.duration,
+            date: draggingEventState.value.date,
+          };
+
+          debouncedUpdateEventPosition(originalEvent, newPosition);
 
           console.log("拖动状态变化，同步事件位置:", {
             id: originalEvent.id,
@@ -1613,6 +1626,24 @@ const debugEventState = () => {
   console.log("========================");
 };
 
+// 使用lodash的防抖函数优化拖拽过程中的频繁更新
+const debouncedUpdateEventPosition = debounce(
+  (event: any, newPosition: any) => {
+    if (dragState.value.isDragging || dragState.value.isResizing) {
+      console.log("防抖更新事件位置:", {
+        id: event.id,
+        newPosition,
+        isDragging: dragState.value.isDragging,
+        isResizing: dragState.value.isResizing,
+      });
+
+      // 更新事件位置
+      Object.assign(event, newPosition);
+    }
+  },
+  16
+); // 60fps，约16ms
+
 // 在组件挂载时设置鼠标移动监听器
 onMounted(() => {
   setupResizeObserver();
@@ -1677,7 +1708,7 @@ onMounted(() => {
     </div>
 
     <!-- 全天事件区域 -->
-    <div class="week-view__all-day-section">
+    <div v-if="hasAllDayEvents" class="week-view__all-day-section">
       <div class="week-view__time-column-label">
         <div>全天</div>
         <button
@@ -1913,7 +1944,7 @@ onMounted(() => {
       :width="440"
       @close="handleFormCancel"
     >
-      <EventForm
+      <EventMiniForm
         :data="eventFormData"
         @time-changed="handleFormTimeChanged"
         @submit="handleFormSubmit"

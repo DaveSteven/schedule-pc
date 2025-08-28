@@ -4,7 +4,6 @@ import {
   ElTabs,
   ElButton,
   ElIcon,
-  ElButtonGroup,
   ElDivider,
   ElCheckbox,
   ElCollapse,
@@ -12,13 +11,16 @@ import {
   ElDropdown,
   ElDropdownMenu,
   ElDropdownItem,
-  ElInput,
+  ElMessage,
+  ElForm,
+  ElFormItem,
 } from "element-plus";
 import {
   ArrowLeft,
   ArrowRight,
   CaretBottom,
   More,
+  ArrowDown,
 } from "@element-plus/icons-vue";
 import MiniCalendar from "@/components/MiniCalendar";
 import { ref, onMounted, computed, watch } from "vue";
@@ -30,6 +32,8 @@ import EventPopover from "@/components/EventPopover";
 import type { UserSwitchType } from "@/stores/app";
 import type { EventData } from "@/components/EventPopover/types";
 import EventDetail from "@/components/EventDetail";
+import EventForm from "@/components/EventForm";
+import { NewCalendarDialog } from "@/components/NewCalendarDialog";
 import { useCalendarEvents } from "@/components/Calendar/composables/useCalendarEvents";
 import type { EventChangeData } from "@/components/Calendar/types/events";
 import dayjs from "dayjs";
@@ -78,6 +82,12 @@ const popoverVisible = ref(false);
 const popoverEventData = ref<EventData | null>(null);
 const popoverTargetElement = ref<HTMLElement | null>(null);
 
+// EventForm相关状态
+const showEventForm = ref(false);
+
+// Calendar组件引用
+const calendarRef = ref<InstanceType<typeof Calendar>>();
+
 // 事件处理方法 - 使用统一的事件处理
 const handleEventClick = (arg: any) => {
   console.log("handleEventClick:", arg);
@@ -95,6 +105,12 @@ const handleEventChange = (info: EventChangeData) => {
   console.log("event change:", info);
   // 事件变更处理，现在由各个视图组件内部处理
   handleCalendarEventChange(info);
+};
+
+// 处理EventForm提交
+const handleEventFormSubmit = (data: any) => {
+  console.log("Event form submitted:", data);
+  // TODO: 处理表单提交逻辑
 };
 
 // Popover事件处理
@@ -119,6 +135,11 @@ const handleTabChange = async (tabIndex: string | number) => {
 
 // 获取日程数据
 const fetchScheduleData = async () => {
+  // 如果正在加载中，则不重复请求
+  if (eventsStore.loading) {
+    return;
+  }
+
   if (currentScheduleType.value && selectedDate.value && viewType.value) {
     await eventsStore.fetchScheduleData(
       currentScheduleType.value as UserSwitchType,
@@ -135,32 +156,45 @@ const handleDateChange = async (data: any) => {
   // 调用统一的事件处理
   handleCalendarDateChange(data);
 
-  // 原有的业务逻辑
+  // 更新store中的selectedDate，这样currentDateText就会自动更新
   if (data.date) {
+    calendarStore.setSelectedDate(data.date);
     await fetchScheduleData();
   }
 };
 
-// 处理上一个时间段
+// 处理上一个时间段 - 使用Calendar组件的prev方法
 const handlePrev = async () => {
-  calendarStore.goToPrevious();
-  await fetchScheduleData();
+  calendarRef.value?.prev();
 };
 
-// 处理下一个时间段
+// 处理下一个时间段 - 使用Calendar组件的next方法
 const handleNext = async () => {
-  calendarStore.goToNext();
-  await fetchScheduleData();
+  calendarRef.value?.next();
 };
+
+// 判断当前选中的日期是否为今天
+const isToday = computed(() => {
+  return dayjs(selectedDate.value).isSame(dayjs(), "day");
+});
 
 // 处理今日按钮点击
 const handleToday = async () => {
+  // 如果已经是今天，不需要执行任何操作
+  if (isToday.value) {
+    return;
+  }
+  // 如果不是今天，则设置为今天
   calendarStore.setToday();
   await fetchScheduleData();
 };
 
 // 处理视图类型切换
 const handleViewTypeChange = async (type: any) => {
+  // 如果选择的视图类型与当前相同，则不执行任何操作
+  if (viewType.value === type) {
+    return;
+  }
   calendarStore.setViewType(type);
   await fetchScheduleData();
 };
@@ -170,10 +204,10 @@ watch(selectedDate, async () => {
   await fetchScheduleData();
 });
 
-// 监听视图类型变化
-watch(viewType, async () => {
-  await fetchScheduleData();
-});
+// 监听视图类型变化 - 已移除，避免重复请求
+// watch(viewType, async () => {
+//   await fetchScheduleData();
+// });
 
 // 初始化
 onMounted(async () => {
@@ -214,10 +248,27 @@ const calendarCategories = ref([
 
 const calendarCollapseActive = ref(["1"]); // 默认展开
 
+// 新建日历相关状态
+const showNewCalendarDialog = ref(false);
+
 // 处理新建日历
 const handleNewCalendar = () => {
-  console.log("新建日历");
-  // TODO: 实现新建日历逻辑
+  showNewCalendarDialog.value = true;
+};
+
+// 处理新建日历提交
+const handleNewCalendarSubmit = (data: { name: string; color: string }) => {
+  // 创建新的日历对象
+  const newCalendar = {
+    id: Date.now().toString(), // 临时ID，实际应该由后端生成
+    name: data.name,
+    color: data.color,
+    isDefault: false,
+    checked: true,
+  };
+
+  // 添加到日历列表
+  calendarCategories.value.push(newCalendar);
 };
 
 // 处理日历项点击
@@ -317,21 +368,29 @@ const handleCalendarItemClick = (calendarId: string) => {
         </ElTabs>
 
         <div class="absolute right-10px bottom-10px flex items-center">
-          <ElButton type="primary" size="large">创建日程</ElButton>
+          <ElButton type="primary" size="large" @click="showEventForm = true"
+            >创建日程</ElButton
+          >
           <!-- <ElInput v-model="search" placeholder="搜索" type="large" /> -->
         </div>
       </div>
       <div class="app-container flex flex-col overflow-hidden">
         <div class="p-15px flex items-center gap-15px">
-          <ElButton @click="handleToday">今天</ElButton>
-          <ElButtonGroup>
-            <ElButton @click="handlePrev"
-              ><ElIcon><ArrowLeft /></ElIcon
-            ></ElButton>
-            <ElButton @click="handleNext"
-              ><ElIcon><ArrowRight /></ElIcon
-            ></ElButton>
-          </ElButtonGroup>
+          <ElButton
+            :type="isToday ? undefined : 'primary'"
+            @click="handleToday"
+          >
+            今天
+          </ElButton>
+          <div class="navigation-controls">
+            <button class="nav-btn prev-btn" @click="handlePrev">
+              <ElIcon><ArrowLeft /></ElIcon>
+            </button>
+            <div class="nav-divider"></div>
+            <button class="nav-btn next-btn" @click="handleNext">
+              <ElIcon><ArrowRight /></ElIcon>
+            </button>
+          </div>
           <div class="current-date">
             <span>{{ currentDateText }}</span>
           </div>
@@ -366,6 +425,7 @@ const handleCalendarItemClick = (calendarId: string) => {
             @date-change="handleDateChange"
             @event-click="handleEventClick"
             @event-change="handleEventChange"
+            ref="calendarRef"
           />
         </div>
       </div>
@@ -380,6 +440,18 @@ const handleCalendarItemClick = (calendarId: string) => {
     >
       <EventDetail :event-data="popoverEventData" />
     </EventPopover>
+
+    <!-- EventForm -->
+    <EventForm
+      v-model:visible="showEventForm"
+      @submit="handleEventFormSubmit"
+    />
+
+    <!-- 新建日历对话框 -->
+    <NewCalendarDialog
+      v-model:visible="showNewCalendarDialog"
+      @submit="handleNewCalendarSubmit"
+    />
   </div>
 </template>
 
@@ -609,6 +681,39 @@ const handleCalendarItemClick = (calendarId: string) => {
         border-top-right-radius: 6px;
         border-bottom-right-radius: 6px;
       }
+    }
+  }
+
+  .navigation-controls {
+    display: flex;
+    align-items: center;
+    background: white;
+    border: 1px solid #d0d3d6;
+    border-radius: 4px;
+    overflow: hidden;
+
+    .nav-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px;
+      height: 30px;
+      border: none;
+      background: white;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      color: #606266;
+
+      .el-icon {
+        font-size: 16px;
+      }
+    }
+
+    .nav-divider {
+      width: 1px;
+      height: 20px;
+      background: #e4e7ed;
+      margin: 0 2px;
     }
   }
 

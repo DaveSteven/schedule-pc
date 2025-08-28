@@ -12,7 +12,7 @@ import { useTimeUtils } from "../../hooks/useTimeUtils";
 import { useCurrentTime } from "../../hooks/useCurrentTime";
 import { useDragHandlers } from "../../hooks/useDragHandlers";
 import { useEventHandlers } from "../../hooks/useEventHandlers";
-import EventForm from "@/components/EventForm/EventForm.vue";
+import EventMiniForm from "@/components/EventMiniForm";
 import EventPopover from "@/components/EventPopover/EventPopover.vue";
 import dayjs from "dayjs";
 import { ElScrollbar } from "element-plus";
@@ -503,7 +503,7 @@ onMounted(() => {
 
 <template>
   <!-- 全天日程组件 -->
-  <div v-if="allDayEvents.length > 0" class="day-all-events">
+  <div class="day-all-events">
     <div class="day-all-events__header">
       <span class="text-11px">GMT+8</span>
     </div>
@@ -524,7 +524,11 @@ onMounted(() => {
             </div>
           </div>
         </div>
-        <div @click="toggleAllDayEvents" class="day-all-events__header-icon">
+        <div
+          v-if="allDayEvents.length > 0 && allDayEvents.length > 2"
+          @click="toggleAllDayEvents"
+          class="day-all-events__header-icon"
+        >
           <ElIcon
             class="day-all-events__expand-icon"
             :class="{
@@ -658,7 +662,7 @@ onMounted(() => {
     :width="440"
     @close="handleFormCancel"
   >
-    <EventForm
+    <EventMiniForm
       :data="eventFormData"
       @time-changed="handleFormTimeChanged"
       @submit="handleFormSubmit"
